@@ -72,7 +72,14 @@ archives, EPub, plain text, and YouTube / general web URLs. See the
 [markitdown README](https://github.com/microsoft/markitdown) for the full,
 up-to-date list.
 
-## Requirements
+## Download a pre-built binary (no Python required)
+
+Each [release](https://github.com/andrest04/markitdown-desktop/releases/latest)
+includes a ready-to-run build for Windows, macOS, and Linux — download the
+zip for your OS, unzip, and run `markitdown-desktop` (or `.exe` on
+Windows). No Python installation needed.
+
+## Requirements (running from source)
 
 - Windows 10/11, macOS, or Linux
 - [Python 3.10+](https://www.python.org/downloads/) (on Windows, check "Add
@@ -80,7 +87,7 @@ up-to-date list.
 - For audio transcription only: [ffmpeg](https://ffmpeg.org/download.html)
   on PATH
 
-## Installing
+## Installing from source
 
 ```bash
 git clone https://github.com/andrest04/markitdown-desktop.git

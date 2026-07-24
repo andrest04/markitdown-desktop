@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- CI workflow: lint (ruff) + syntax check + headless smoke test on every
+  push/PR, run on Windows, macOS, and Linux.
+- Dependabot: weekly dependency update PRs for pip and GitHub Actions.
+- Release workflow: pushing a `vX.Y.Z` tag now builds a standalone binary
+  for Windows, macOS, and Linux with PyInstaller and attaches each as a
+  release asset automatically — no Python installation required to run
+  the app anymore.
+
 ## [1.1.0] - 2026-07-24
 
 ### Added
