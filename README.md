@@ -1,5 +1,7 @@
 # MarkItDown Desktop (Unofficial)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A native PySide6 desktop GUI around Microsoft's
 [`markitdown`](https://github.com/microsoft/markitdown) Python package.
 The core flow is intentionally simple: **drop a file (or paste a URL) and
