@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import subprocess
 import webbrowser
 from importlib.metadata import PackageNotFoundError, version as pkg_version
@@ -817,8 +818,14 @@ class MainWindow(QMainWindow):
             self._open_containing_folder(item.saved_path)
 
     def _open_containing_folder(self, path: str) -> None:
+        normalized = os.path.normpath(path)
         try:
-            subprocess.run(["explorer", "/select,", os.path.normpath(path)], check=False)
+            if sys.platform.startswith("win"):
+                subprocess.run(["explorer", "/select,", normalized], check=False)
+            elif sys.platform == "darwin":
+                subprocess.run(["open", "-R", normalized], check=False)
+            else:
+                subprocess.run(["xdg-open", os.path.dirname(normalized)], check=False)
         except OSError:
             pass
 

@@ -62,9 +62,9 @@ up-to-date list.
 
 ## Requirements
 
-- Windows 10/11
-- [Python 3.10+](https://www.python.org/downloads/) (check "Add python.exe
-  to PATH" during install)
+- Windows 10/11, macOS, or Linux
+- [Python 3.10+](https://www.python.org/downloads/) (on Windows, check "Add
+  python.exe to PATH" during install)
 - For audio transcription only: [ffmpeg](https://ffmpeg.org/download.html)
   on PATH
 
@@ -76,13 +76,16 @@ cd markitdown-desktop
 python -m pip install -r requirements.txt
 ```
 
+On macOS/Linux, use `python3` instead of `python` if that's how your
+system exposes it.
+
 ## Running
 
-Either double-click `run.bat`, or from the project folder:
+- **Windows**: double-click `run.bat`, or run `python main.py`.
+- **macOS/Linux**: run `./run.sh`, or `python3 main.py`.
 
-```bash
-python main.py
-```
+The "open containing folder" action (double-click a finished row) uses
+`explorer` on Windows, `open -R` on macOS, and `xdg-open` on Linux.
 
 ## Project structure
 

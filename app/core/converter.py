@@ -73,8 +73,9 @@ def default_basename(item: QueueItem) -> str:
 def get_downloads_dir() -> Path:
     """Resolve the current user's Downloads folder.
 
-    Uses Path.home() so this works for any Windows account, not just the
-    machine this was developed on (never hardcode a specific user's path).
+    Uses Path.home() so this works for any account on Windows, macOS, or
+    Linux, not just the machine this was developed on (never hardcode a
+    specific user's path).
     """
     return Path.home() / "Downloads"
 
