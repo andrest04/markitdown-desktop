@@ -110,6 +110,13 @@
   .btn-primary:hover { background: var(--accent-hover); }
   .btn-secondary { background: var(--bg-elevated); color: var(--text); border-color: var(--border); }
   .btn-secondary:hover { background: var(--bg-muted); }
+  .btn-star { background: var(--bg-elevated); color: var(--text); border-color: var(--border); }
+  .btn-star:hover { background: var(--bg-muted); }
+  .btn-star svg { width: 16px; height: 16px; fill: #e3b341; flex: none; }
+  .btn-star .star-count {
+    color: var(--text-muted); font-weight: 600; font-variant-numeric: tabular-nums;
+    border-left: 1px solid var(--border); margin-left: 2px; padding-left: 10px;
+  }
 
   /* Screenshot */
   .screenshot-frame {
@@ -227,7 +234,11 @@
     </div>
     <div class="cta-row hero-animate">
       <a class="btn btn-primary" href="https://github.com/andrest04/markitdown-desktop/releases/latest">Download latest release</a>
-      <a class="btn btn-secondary" href="https://github.com/andrest04/markitdown-desktop">View source on GitHub</a>
+      <a class="btn btn-star" href="https://github.com/andrest04/markitdown-desktop" aria-label="Star this project on GitHub">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.79L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.193L.818 6.375a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
+        Star on GitHub
+        <span class="star-count" id="starCount" aria-hidden="true"></span>
+      </a>
     </div>
   </section>
 
@@ -356,6 +367,22 @@ python3 -m pip install -r requirements.txt
       document.getElementById(tab.dataset.target).classList.add("active");
     });
   });
+
+  (function () {
+    var el = document.getElementById("starCount");
+    if (!el) return;
+    var controller = new AbortController();
+    var timeout = setTimeout(function () { controller.abort(); }, 4000);
+    fetch("https://api.github.com/repos/andrest04/markitdown-desktop", { signal: controller.signal })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        clearTimeout(timeout);
+        if (!data || typeof data.stargazers_count !== "number") return;
+        var n = data.stargazers_count;
+        el.textContent = n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
+      })
+      .catch(function () { /* offline or rate-limited: button still works without a count */ });
+  })();
 </script>
 
 </body>
