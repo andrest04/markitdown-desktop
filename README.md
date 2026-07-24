@@ -10,6 +10,8 @@ manual "export" step required.
 > maintained, or endorsed by Microsoft. See [Credits & License](#credits--license)
 > below.
 
+![MarkItDown Desktop screenshot](assets/screenshot.png)
+
 ## Features
 
 - Drag-and-drop of files/folders (recursive) onto a big, centered drop
