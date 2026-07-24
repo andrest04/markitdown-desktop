@@ -19,7 +19,7 @@ manual "export" step required.
 > maintained, or endorsed by Microsoft. See [Credits & License](#credits--license)
 > below.
 
-![MarkItDown Desktop screenshot](assets/screenshot.png)
+![MarkItDown Desktop walkthrough: add a file, it converts, the rendered markdown preview appears](assets/demo.gif)
 
 **[🌐 Website](https://andrest04.github.io/markitdown-desktop/)** ·
 **[⬇️ Latest release](https://github.com/andrest04/markitdown-desktop/releases/latest)**
