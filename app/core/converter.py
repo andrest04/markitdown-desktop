@@ -36,7 +36,6 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 from urllib.parse import urlparse
 
 from markitdown import MarkItDown, StreamInfo
@@ -96,7 +95,7 @@ def unique_download_path(directory: Path, base_name: str) -> Path:
     return candidate
 
 
-def auto_save_markdown(item: QueueItem, markdown_text: str, downloads_dir: Optional[Path] = None) -> Path:
+def auto_save_markdown(item: QueueItem, markdown_text: str, downloads_dir: Path | None = None) -> Path:
     """Write `markdown_text` to the Downloads folder using a name derived from
     the item's source, avoiding collisions. Returns the path written to."""
     directory = downloads_dir if downloads_dir is not None else get_downloads_dir()

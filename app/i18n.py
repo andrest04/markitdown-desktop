@@ -13,8 +13,6 @@ to `i18n.manager.language_changed` and re-pull their text from `tr()` in a
 """
 from __future__ import annotations
 
-from typing import Optional
-
 from PySide6.QtCore import QLocale, QObject, QSettings, Signal
 
 LANG_EN = "en"
@@ -277,7 +275,7 @@ def detect_system_language() -> str:
     """Spanish for es_* system locales, English otherwise."""
     try:
         locale_name = QLocale.system().name()  # e.g. "es_AR", "en_US"
-    except Exception:
+    except Exception:  # noqa: BLE001 -- locale detection must never crash startup
         return LANG_EN
     if locale_name.lower().startswith("es"):
         return LANG_ES
@@ -309,7 +307,7 @@ class TranslationManager(QObject):
         else:
             self._language = detect_system_language()
 
-    def set_language(self, language: str, settings: Optional[QSettings] = None) -> None:
+    def set_language(self, language: str, settings: QSettings | None = None) -> None:
         if language not in SUPPORTED_LANGUAGES:
             language = LANG_EN
         if language == self._language:

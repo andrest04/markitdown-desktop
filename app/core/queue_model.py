@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 
@@ -40,7 +40,7 @@ class QueueItem:
     detected_type: str = ""
     status: ItemStatus = ItemStatus.PENDING
     error_message: str = ""
-    markdown_result: Optional[str] = None
+    markdown_result: str | None = None
     # Per-item conversion overrides (extension/mimetype/charset hints)
     extension_override: str = ""
     mimetype_override: str = ""
@@ -69,17 +69,17 @@ class QueueTableModel(QAbstractTableModel):
         self._items: list[QueueItem] = []
 
     # -- Basic Qt model API -------------------------------------------------
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
+    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: B008 -- standard Qt model API signature
         if parent.isValid():
             return 0
         return len(self._items)
 
-    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
+    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: B008 -- standard Qt model API signature
         if parent.isValid():
             return 0
         return COLUMN_COUNT
 
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole) -> Any:  # noqa: N802
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
         if role != Qt.ItemDataRole.DisplayRole:
             return None
         if orientation == Qt.Orientation.Horizontal:
@@ -122,7 +122,7 @@ class QueueTableModel(QAbstractTableModel):
     def items(self) -> list[QueueItem]:
         return self._items
 
-    def item_at(self, row: int) -> Optional[QueueItem]:
+    def item_at(self, row: int) -> QueueItem | None:
         if 0 <= row < len(self._items):
             return self._items[row]
         return None

@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import os
-import sys
 import subprocess
+import sys
 import webbrowser
-from importlib.metadata import PackageNotFoundError, version as pkg_version
-from typing import Optional
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as pkg_version
 
+import markdown as markdown_lib
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QSettings, Qt, QThreadPool
 from PySide6.QtGui import QAction, QColor, QFont, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
@@ -36,8 +37,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-import markdown as markdown_lib
-
 from app.core.converter import (
     ConversionOptions,
     ConversionWorker,
@@ -53,7 +52,8 @@ from app.core.queue_model import (
     QueueTableModel,
     SourceKind,
 )
-from app.i18n import LANG_EN, LANG_ES, manager as i18n_manager, tr
+from app.i18n import LANG_EN, LANG_ES, tr
+from app.i18n import manager as i18n_manager
 from app.ui.theme import stylesheet_for
 
 ORG_NAME = "andres"
@@ -121,16 +121,16 @@ class DropZone(QWidget):
     def retranslate(self) -> None:
         self.set_prominent(self._prominent)
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802
+    def mousePressEvent(self, event) -> None:
         if self._on_click is not None and event.button() == Qt.MouseButton.LeftButton:
             self._on_click()
         super().mousePressEvent(event)
 
-    def enterEvent(self, event) -> None:  # noqa: N802
+    def enterEvent(self, event) -> None:
         self._animate_shadow(28)
         super().enterEvent(event)
 
-    def leaveEvent(self, event) -> None:  # noqa: N802
+    def leaveEvent(self, event) -> None:
         self._animate_shadow(0)
         super().leaveEvent(event)
 
@@ -140,19 +140,19 @@ class DropZone(QWidget):
         self._hover_anim.setEndValue(target)
         self._hover_anim.start()
 
-    def dragEnterEvent(self, event):  # noqa: N802
+    def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
             self.setProperty("dragActive", True)
             self.style().unpolish(self)
             self.style().polish(self)
 
-    def dragLeaveEvent(self, event):  # noqa: N802
+    def dragLeaveEvent(self, event):
         self.setProperty("dragActive", False)
         self.style().unpolish(self)
         self.style().polish(self)
 
-    def dropEvent(self, event):  # noqa: N802
+    def dropEvent(self, event):
         self.setProperty("dragActive", False)
         self.style().unpolish(self)
         self.style().polish(self)
@@ -198,7 +198,7 @@ class AdvancedSettingsDialog(QDialog):
     hints) are for the rare cases that need them.
     """
 
-    def __init__(self, main_window: "MainWindow", parent=None):
+    def __init__(self, main_window: MainWindow, parent=None):
         super().__init__(parent)
         self.main_window = main_window
         self.setWindowTitle(tr("advanced.title"))
@@ -565,7 +565,7 @@ class MainWindow(QMainWindow):
         if app is not None:
             app.setStyleSheet(stylesheet_for(theme_name))
 
-    def closeEvent(self, event) -> None:  # noqa: N802
+    def closeEvent(self, event) -> None:
         self.settings.setValue("window/geometry", self.saveGeometry())
         super().closeEvent(event)
 
@@ -659,7 +659,7 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(tr("status.added_files", count=len(added_rows)), 4000)
             self._start_conversion(added_rows)
 
-    def _add_single_file(self, path: str) -> Optional[int]:
+    def _add_single_file(self, path: str) -> int | None:
         abs_path = os.path.abspath(path)
         if self.model.source_exists(abs_path):
             return None
@@ -676,7 +676,7 @@ class MainWindow(QMainWindow):
         url = self.url_edit.text().strip()
         if not url:
             return
-        if not (url.startswith("http://") or url.startswith("https://")):
+        if not url.startswith(("http://", "https://")):
             QMessageBox.warning(self, tr("msgbox.invalid_url.title"), tr("msgbox.invalid_url.text"))
             return
         if self.model.source_exists(url):
