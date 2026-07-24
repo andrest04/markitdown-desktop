@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-24
+
 ### Added
 
 - Landing page (GitHub Pages) with feature overview, screenshot, supported
@@ -17,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SECURITY.md` with a private vulnerability-reporting process.
 - Release, platform, and license badges in the README, plus a security
   callout and a Contributing section linking to the new files.
+- `CHANGELOG.md` following Keep a Changelog.
 - Branch protection on `main`: external contributors must go through a
   reviewed pull request.
 
@@ -39,5 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "open containing folder" dispatches to `explorer`/`open -R`/`xdg-open`
   per OS.
 
-[Unreleased]: https://github.com/andrest04/markitdown-desktop/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/andrest04/markitdown-desktop/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/andrest04/markitdown-desktop/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/andrest04/markitdown-desktop/releases/tag/v1.0.0
