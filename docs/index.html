@@ -15,10 +15,11 @@
     --border: #dcdfe4;
     --accent: #2f6fed;
     --accent-hover: #4a82f0;
+    --accent-tint: #e9f0ff;
     --accent-text: #ffffff;
     --code-bg: #1e2126;
     --code-text: #e6e8eb;
-    --shadow: 0 1px 3px rgba(20, 24, 32, 0.08), 0 8px 24px rgba(20, 24, 32, 0.06);
+    --shadow: 0 1px 2px rgba(20, 24, 32, 0.06), 0 12px 28px -8px rgba(20, 24, 32, 0.16);
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -30,23 +31,24 @@
       --border: #34383f;
       --accent: #3d7bf5;
       --accent-hover: #5a90f7;
+      --accent-tint: #1f2b40;
       --accent-text: #ffffff;
       --code-bg: #17191d;
       --code-text: #e6e8eb;
-      --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 12px 28px rgba(0, 0, 0, 0.35);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 32px -8px rgba(0, 0, 0, 0.45);
     }
   }
   :root[data-theme="dark"] {
     --bg: #1e2126; --bg-elevated: #26292f; --bg-muted: #22252b; --text: #e6e8eb;
     --text-muted: #9aa3b0; --border: #34383f; --accent: #3d7bf5; --accent-hover: #5a90f7;
-    --accent-text: #ffffff; --code-bg: #17191d; --code-text: #e6e8eb;
-    --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 12px 28px rgba(0,0,0,0.35);
+    --accent-tint: #1f2b40; --accent-text: #ffffff; --code-bg: #17191d; --code-text: #e6e8eb;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 16px 32px -8px rgba(0,0,0,0.45);
   }
   :root[data-theme="light"] {
     --bg: #f5f6f8; --bg-elevated: #ffffff; --bg-muted: #eceff3; --text: #1d1f21;
     --text-muted: #5b6472; --border: #dcdfe4; --accent: #2f6fed; --accent-hover: #4a82f0;
-    --accent-text: #ffffff; --code-bg: #1e2126; --code-text: #e6e8eb;
-    --shadow: 0 1px 3px rgba(20,24,32,0.08), 0 8px 24px rgba(20,24,32,0.06);
+    --accent-tint: #e9f0ff; --accent-text: #ffffff; --code-bg: #1e2126; --code-text: #e6e8eb;
+    --shadow: 0 1px 2px rgba(20,24,32,0.06), 0 12px 28px -8px rgba(20,24,32,0.16);
   }
 
   * { box-sizing: border-box; }
@@ -58,37 +60,52 @@
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
   }
-  main { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+  main { max-width: 920px; margin: 0 auto; padding: 0 24px; }
   a { color: var(--accent); }
+  a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px;
+  }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero-animate { animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+    .hero-animate:nth-child(2) { animation-delay: 0.05s; }
+    .hero-animate:nth-child(3) { animation-delay: 0.1s; }
+    .hero-animate:nth-child(4) { animation-delay: 0.15s; }
+  }
 
   /* Nav */
   .nav {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 20px 24px; max-width: 960px; margin: 0 auto;
+    padding: 20px 24px; max-width: 920px; margin: 0 auto;
   }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 1.05rem; }
-  .brand .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); display: inline-block; }
-  .nav-links { display: flex; gap: 20px; font-size: 0.92rem; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 1.02rem; text-decoration: none; color: var(--text); }
+  .brand .dot { width: 9px; height: 9px; border-radius: 3px; background: var(--accent); display: inline-block; flex: none; }
+  .nav-links { display: flex; gap: 22px; font-size: 0.9rem; }
   .nav-links a { color: var(--text-muted); text-decoration: none; }
   .nav-links a:hover { color: var(--accent); }
 
   /* Hero */
-  .hero { text-align: center; padding: 56px 0 40px; }
+  .hero { text-align: center; padding: 64px 0 44px; }
   .hero h1 {
-    font-size: clamp(2rem, 4.5vw, 3rem);
-    font-weight: 700; letter-spacing: -0.02em; margin: 0 0 16px;
+    font-size: clamp(2.1rem, 5vw, 3.25rem);
+    font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; margin: 0 0 18px;
   }
   .hero p.lead {
-    color: var(--text-muted); font-size: 1.1rem; max-width: 620px; margin: 0 auto 28px;
+    color: var(--text-muted); font-size: 1.12rem; max-width: 560px; margin: 0 auto 30px;
   }
-  .badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 28px; }
+  .badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 30px; }
   .badges img { display: block; height: 20px; }
   .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
   .btn {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 11px 20px; border-radius: 8px; font-weight: 600; font-size: 0.95rem;
-    text-decoration: none; border: 1px solid transparent; transition: background-color 0.15s ease;
+    padding: 12px 22px; border-radius: 8px; font-weight: 600; font-size: 0.95rem;
+    text-decoration: none; border: 1px solid transparent; transition: background-color 0.15s ease, transform 0.15s ease;
   }
+  .btn:active { transform: translateY(1px); }
   .btn-primary { background: var(--accent); color: var(--accent-text); }
   .btn-primary:hover { background: var(--accent-hover); }
   .btn-secondary { background: var(--bg-elevated); color: var(--text); border-color: var(--border); }
@@ -96,38 +113,54 @@
 
   /* Screenshot */
   .screenshot-frame {
-    margin: 40px 0 64px; border-radius: 14px; overflow: hidden;
+    margin: 8px 0 72px; border-radius: 14px; overflow: hidden;
     border: 1px solid var(--border); box-shadow: var(--shadow);
   }
   .screenshot-frame img { display: block; width: 100%; height: auto; }
 
   /* Sections */
-  section { margin-bottom: 64px; }
-  h2 { font-size: 1.6rem; letter-spacing: -0.01em; margin: 0 0 8px; }
-  .section-lead { color: var(--text-muted); margin: 0 0 28px; max-width: 640px; }
+  section { margin-bottom: 72px; }
+  h2 { font-size: 1.55rem; letter-spacing: -0.015em; margin: 0 0 10px; }
+  .section-lead { color: var(--text-muted); margin: 0 0 32px; max-width: 620px; }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-  .card {
-    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px;
-    padding: 20px; box-shadow: var(--shadow);
-  }
-  .card .icon { font-size: 1.4rem; margin-bottom: 10px; display: block; }
-  .card h3 { font-size: 1.02rem; margin: 0 0 6px; }
-  .card p { color: var(--text-muted); font-size: 0.92rem; margin: 0; }
+  /* Features: one elevated primary feature + a tight list of the rest, not a card grid */
+  .feature-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: stretch; }
+  @media (max-width: 720px) { .feature-layout { grid-template-columns: 1fr; } }
 
-  /* Steps */
-  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; counter-reset: step; }
-  .step { position: relative; padding-left: 44px; }
-  .step::before {
-    counter-increment: step; content: counter(step);
-    position: absolute; left: 0; top: 0;
-    width: 30px; height: 30px; border-radius: 50%;
-    background: var(--accent); color: var(--accent-text);
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 0.9rem;
+  .feature-primary {
+    background: var(--accent-tint); border: 1px solid var(--border); border-radius: 14px;
+    padding: 28px; display: flex; flex-direction: column; justify-content: center;
   }
-  .step h3 { margin: 2px 0 6px; font-size: 1rem; }
-  .step p { margin: 0; color: var(--text-muted); font-size: 0.92rem; }
+  .feature-primary .path-chip {
+    display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 7px;
+    padding: 5px 10px; font-size: 0.8rem; font-family: "Cascadia Code", Consolas, monospace;
+    color: var(--text-muted); margin-bottom: 16px;
+  }
+  .feature-primary h3 { font-size: 1.2rem; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .feature-primary p { color: var(--text-muted); margin: 0; font-size: 0.96rem; }
+
+  .feature-list {
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 14px;
+    padding: 6px 24px;
+  }
+  .feature-row { display: flex; gap: 14px; padding: 16px 0; }
+  .feature-row + .feature-row { border-top: 1px solid var(--border); }
+  .feature-row .mark { flex: none; width: 20px; text-align: center; font-size: 1rem; line-height: 1.6; }
+  .feature-row h3 { font-size: 0.96rem; margin: 0 0 3px; }
+  .feature-row p { color: var(--text-muted); font-size: 0.88rem; margin: 0; }
+
+  /* How it works: a connected flow, not numbered circles */
+  .flow { display: flex; align-items: stretch; gap: 4px; }
+  @media (max-width: 640px) { .flow { flex-direction: column; } }
+  .flow-step { flex: 1; min-width: 0; }
+  .flow-step h3 { font-size: 1rem; margin: 0 0 6px; }
+  .flow-step p { margin: 0; color: var(--text-muted); font-size: 0.92rem; }
+  .flow-arrow {
+    flex: none; display: flex; align-items: center; justify-content: center;
+    color: var(--border); font-size: 1.3rem; padding: 0 6px;
+  }
+  @media (max-width: 640px) { .flow-arrow { padding: 4px 0; transform: rotate(90deg); align-self: flex-start; margin-left: 2px; } }
 
   /* Formats */
   .formats { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -162,14 +195,14 @@
 
   .disclaimer {
     background: var(--bg-muted); border: 1px solid var(--border); border-radius: 10px;
-    padding: 14px 18px; font-size: 0.88rem; color: var(--text-muted); margin: 32px 0 0;
+    padding: 14px 18px; font-size: 0.88rem; color: var(--text-muted); margin: 40px 0 0;
   }
 </style>
 </head>
 <body>
 
 <nav class="nav">
-  <div class="brand"><span class="dot"></span> MarkItDown Desktop</div>
+  <a class="brand" href="#top"><span class="dot"></span>MarkItDown Desktop</a>
   <div class="nav-links">
     <a href="#features">Features</a>
     <a href="#formats">Formats</a>
@@ -178,21 +211,21 @@
   </div>
 </nav>
 
-<main>
+<main id="top">
 
   <section class="hero">
-    <h1>Drop a file. Get Markdown. Done.</h1>
-    <p class="lead">
+    <h1 class="hero-animate">Drop a file. Get Markdown. Done.</h1>
+    <p class="lead hero-animate">
       A free, open-source desktop app for Microsoft's <code>markitdown</code>.
       Drag any file or paste a URL — it converts and saves straight to your
       Downloads folder. No manual export step, no CLI required.
     </p>
-    <div class="badges">
+    <div class="badges hero-animate">
       <a href="https://github.com/andrest04/markitdown-desktop/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
       <a href="https://github.com/andrest04/markitdown-desktop/releases"><img src="https://img.shields.io/github/v/release/andrest04/markitdown-desktop" alt="Latest release"></a>
       <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational" alt="Cross-platform">
     </div>
-    <div class="cta-row">
+    <div class="cta-row hero-animate">
       <a class="btn btn-primary" href="https://github.com/andrest04/markitdown-desktop/releases/latest">Download latest release</a>
       <a class="btn btn-secondary" href="https://github.com/andrest04/markitdown-desktop">View source on GitHub</a>
     </div>
@@ -205,52 +238,53 @@
   <section id="features">
     <h2>Why this exists</h2>
     <p class="section-lead">markitdown is a great converter, but it's a command-line tool. This wraps the same engine in an interface anyone can use.</p>
-    <div class="grid">
-      <div class="card">
-        <span class="icon">📥</span>
-        <h3>Drop and done</h3>
-        <p>Drag a file, click to browse, or paste a URL — conversion starts immediately, no extra clicks.</p>
+
+    <div class="feature-layout">
+      <div class="feature-primary">
+        <span class="path-chip">~/Downloads/report.md</span>
+        <h3>Auto-saves to Downloads — always</h3>
+        <p>The moment a file finishes converting, the <code>.md</code> lands in your Downloads folder under its original name. Name collisions get a safe numeric suffix instead of overwriting anything. No export dialog to remember.</p>
       </div>
-      <div class="card">
-        <span class="icon">💾</span>
-        <h3>Auto-saves to Downloads</h3>
-        <p>Every converted file lands in your Downloads folder automatically, with safe collision handling.</p>
-      </div>
-      <div class="card">
-        <span class="icon">👁️</span>
-        <h3>Live preview</h3>
-        <p>See the rendered Markdown or edit the raw output before saving a copy elsewhere.</p>
-      </div>
-      <div class="card">
-        <span class="icon">🌗</span>
-        <h3>Light &amp; dark themes</h3>
-        <p>Follows your system theme automatically, or switch manually anytime.</p>
-      </div>
-      <div class="card">
-        <span class="icon">🌐</span>
-        <h3>English &amp; Spanish</h3>
-        <p>Full UI translation, switchable live from the menu bar — no restart needed.</p>
-      </div>
-      <div class="card">
-        <span class="icon">⚙️</span>
-        <h3>Advanced options when you need them</h3>
-        <p>Plugins, Azure Document Intelligence, and per-file format hints — tucked away, not in your face.</p>
+
+      <div class="feature-list">
+        <div class="feature-row">
+          <span class="mark">→</span>
+          <div><h3>Drop and done</h3><p>Drag, click to browse, or paste a URL — conversion starts immediately.</p></div>
+        </div>
+        <div class="feature-row">
+          <span class="mark">→</span>
+          <div><h3>Live preview</h3><p>Rendered or raw Markdown, editable before saving a copy elsewhere.</p></div>
+        </div>
+        <div class="feature-row">
+          <span class="mark">→</span>
+          <div><h3>Light &amp; dark themes</h3><p>Follows your system automatically, or switch manually.</p></div>
+        </div>
+        <div class="feature-row">
+          <span class="mark">→</span>
+          <div><h3>English &amp; Spanish</h3><p>Switch live from the menu bar — no restart needed.</p></div>
+        </div>
+        <div class="feature-row">
+          <span class="mark">→</span>
+          <div><h3>Advanced options, out of the way</h3><p>Plugins, Azure Document Intelligence, and format hints live in a separate settings dialog.</p></div>
+        </div>
       </div>
     </div>
   </section>
 
   <section>
     <h2>How it works</h2>
-    <div class="steps">
-      <div class="step">
+    <div class="flow">
+      <div class="flow-step">
         <h3>Drop a file</h3>
         <p>Or click the drop zone to browse, or paste a URL.</p>
       </div>
-      <div class="step">
+      <div class="flow-arrow" aria-hidden="true">→</div>
+      <div class="flow-step">
         <h3>It converts</h3>
         <p>Runs in the background — the UI never freezes, even on large batches.</p>
       </div>
-      <div class="step">
+      <div class="flow-arrow" aria-hidden="true">→</div>
+      <div class="flow-step">
         <h3>Find it in Downloads</h3>
         <p>The <code>.md</code> file is already there. Double-click the row to open its folder.</p>
       </div>
