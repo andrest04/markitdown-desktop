@@ -1,0 +1,3 @@
+PySide6
+markitdown[all]
+markdown
