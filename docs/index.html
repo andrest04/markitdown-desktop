@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MarkItDown Desktop — drop it, get Markdown</title>
+<meta name="description" content="An unofficial, open-source desktop GUI for Microsoft's markitdown. Drag a file, get Markdown in your Downloads folder. Windows, macOS, Linux." />
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --bg-elevated: #ffffff;
+    --bg-muted: #eceff3;
+    --text: #1d1f21;
+    --text-muted: #5b6472;
+    --border: #dcdfe4;
+    --accent: #2f6fed;
+    --accent-hover: #4a82f0;
+    --accent-text: #ffffff;
+    --code-bg: #1e2126;
+    --code-text: #e6e8eb;
+    --shadow: 0 1px 3px rgba(20, 24, 32, 0.08), 0 8px 24px rgba(20, 24, 32, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e2126;
+      --bg-elevated: #26292f;
+      --bg-muted: #22252b;
+      --text: #e6e8eb;
+      --text-muted: #9aa3b0;
+      --border: #34383f;
+      --accent: #3d7bf5;
+      --accent-hover: #5a90f7;
+      --accent-text: #ffffff;
+      --code-bg: #17191d;
+      --code-text: #e6e8eb;
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 12px 28px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1e2126; --bg-elevated: #26292f; --bg-muted: #22252b; --text: #e6e8eb;
+    --text-muted: #9aa3b0; --border: #34383f; --accent: #3d7bf5; --accent-hover: #5a90f7;
+    --accent-text: #ffffff; --code-bg: #17191d; --code-text: #e6e8eb;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 12px 28px rgba(0,0,0,0.35);
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f6f8; --bg-elevated: #ffffff; --bg-muted: #eceff3; --text: #1d1f21;
+    --text-muted: #5b6472; --border: #dcdfe4; --accent: #2f6fed; --accent-hover: #4a82f0;
+    --accent-text: #ffffff; --code-bg: #1e2126; --code-text: #e6e8eb;
+    --shadow: 0 1px 3px rgba(20,24,32,0.08), 0 8px 24px rgba(20,24,32,0.06);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", Roboto, sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--accent); }
+
+  /* Nav */
+  .nav {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 24px; max-width: 960px; margin: 0 auto;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 1.05rem; }
+  .brand .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); display: inline-block; }
+  .nav-links { display: flex; gap: 20px; font-size: 0.92rem; }
+  .nav-links a { color: var(--text-muted); text-decoration: none; }
+  .nav-links a:hover { color: var(--accent); }
+
+  /* Hero */
+  .hero { text-align: center; padding: 56px 0 40px; }
+  .hero h1 {
+    font-size: clamp(2rem, 4.5vw, 3rem);
+    font-weight: 700; letter-spacing: -0.02em; margin: 0 0 16px;
+  }
+  .hero p.lead {
+    color: var(--text-muted); font-size: 1.1rem; max-width: 620px; margin: 0 auto 28px;
+  }
+  .badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 28px; }
+  .badges img { display: block; height: 20px; }
+  .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 11px 20px; border-radius: 8px; font-weight: 600; font-size: 0.95rem;
+    text-decoration: none; border: 1px solid transparent; transition: background-color 0.15s ease;
+  }
+  .btn-primary { background: var(--accent); color: var(--accent-text); }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--bg-elevated); color: var(--text); border-color: var(--border); }
+  .btn-secondary:hover { background: var(--bg-muted); }
+
+  /* Screenshot */
+  .screenshot-frame {
+    margin: 40px 0 64px; border-radius: 14px; overflow: hidden;
+    border: 1px solid var(--border); box-shadow: var(--shadow);
+  }
+  .screenshot-frame img { display: block; width: 100%; height: auto; }
+
+  /* Sections */
+  section { margin-bottom: 64px; }
+  h2 { font-size: 1.6rem; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .section-lead { color: var(--text-muted); margin: 0 0 28px; max-width: 640px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; box-shadow: var(--shadow);
+  }
+  .card .icon { font-size: 1.4rem; margin-bottom: 10px; display: block; }
+  .card h3 { font-size: 1.02rem; margin: 0 0 6px; }
+  .card p { color: var(--text-muted); font-size: 0.92rem; margin: 0; }
+
+  /* Steps */
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; counter-reset: step; }
+  .step { position: relative; padding-left: 44px; }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 0;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--accent); color: var(--accent-text);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 0.9rem;
+  }
+  .step h3 { margin: 2px 0 6px; font-size: 1rem; }
+  .step p { margin: 0; color: var(--text-muted); font-size: 0.92rem; }
+
+  /* Formats */
+  .formats { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill {
+    background: var(--bg-muted); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 12px; border-radius: 999px; font-size: 0.85rem;
+  }
+
+  /* Install tabs */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  .tab {
+    background: transparent; border: none; padding: 10px 16px; font-size: 0.92rem; font-weight: 600;
+    color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  .tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  pre {
+    background: var(--code-bg); color: var(--code-text); border-radius: 8px;
+    padding: 16px; overflow-x: auto; font-size: 0.86rem; margin: 0 0 10px;
+    font-family: "Cascadia Code", Consolas, "SFMono-Regular", Menlo, monospace;
+  }
+  code { font-family: "Cascadia Code", Consolas, "SFMono-Regular", Menlo, monospace; }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--border); padding: 28px 0 48px;
+    color: var(--text-muted); font-size: 0.88rem; text-align: center;
+  }
+  footer p { margin: 0 0 6px; }
+  footer a { color: var(--text-muted); text-decoration: underline; }
+
+  .disclaimer {
+    background: var(--bg-muted); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px; font-size: 0.88rem; color: var(--text-muted); margin: 32px 0 0;
+  }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="brand"><span class="dot"></span> MarkItDown Desktop</div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#formats">Formats</a>
+    <a href="#install">Install</a>
+    <a href="https://github.com/andrest04/markitdown-desktop">GitHub</a>
+  </div>
+</nav>
+
+<main>
+
+  <section class="hero">
+    <h1>Drop a file. Get Markdown. Done.</h1>
+    <p class="lead">
+      A free, open-source desktop app for Microsoft's <code>markitdown</code>.
+      Drag any file or paste a URL — it converts and saves straight to your
+      Downloads folder. No manual export step, no CLI required.
+    </p>
+    <div class="badges">
+      <a href="https://github.com/andrest04/markitdown-desktop/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
+      <a href="https://github.com/andrest04/markitdown-desktop/releases"><img src="https://img.shields.io/github/v/release/andrest04/markitdown-desktop" alt="Latest release"></a>
+      <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational" alt="Cross-platform">
+    </div>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/andrest04/markitdown-desktop/releases/latest">Download latest release</a>
+      <a class="btn btn-secondary" href="https://github.com/andrest04/markitdown-desktop">View source on GitHub</a>
+    </div>
+  </section>
+
+  <div class="screenshot-frame">
+    <img src="screenshot.png" alt="MarkItDown Desktop main window, showing the drag-and-drop zone and markdown preview" loading="lazy">
+  </div>
+
+  <section id="features">
+    <h2>Why this exists</h2>
+    <p class="section-lead">markitdown is a great converter, but it's a command-line tool. This wraps the same engine in an interface anyone can use.</p>
+    <div class="grid">
+      <div class="card">
+        <span class="icon">📥</span>
+        <h3>Drop and done</h3>
+        <p>Drag a file, click to browse, or paste a URL — conversion starts immediately, no extra clicks.</p>
+      </div>
+      <div class="card">
+        <span class="icon">💾</span>
+        <h3>Auto-saves to Downloads</h3>
+        <p>Every converted file lands in your Downloads folder automatically, with safe collision handling.</p>
+      </div>
+      <div class="card">
+        <span class="icon">👁️</span>
+        <h3>Live preview</h3>
+        <p>See the rendered Markdown or edit the raw output before saving a copy elsewhere.</p>
+      </div>
+      <div class="card">
+        <span class="icon">🌗</span>
+        <h3>Light &amp; dark themes</h3>
+        <p>Follows your system theme automatically, or switch manually anytime.</p>
+      </div>
+      <div class="card">
+        <span class="icon">🌐</span>
+        <h3>English &amp; Spanish</h3>
+        <p>Full UI translation, switchable live from the menu bar — no restart needed.</p>
+      </div>
+      <div class="card">
+        <span class="icon">⚙️</span>
+        <h3>Advanced options when you need them</h3>
+        <p>Plugins, Azure Document Intelligence, and per-file format hints — tucked away, not in your face.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <div class="steps">
+      <div class="step">
+        <h3>Drop a file</h3>
+        <p>Or click the drop zone to browse, or paste a URL.</p>
+      </div>
+      <div class="step">
+        <h3>It converts</h3>
+        <p>Runs in the background — the UI never freezes, even on large batches.</p>
+      </div>
+      <div class="step">
+        <h3>Find it in Downloads</h3>
+        <p>The <code>.md</code> file is already there. Double-click the row to open its folder.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="formats">
+    <h2>Supported formats</h2>
+    <p class="section-lead">Anything markitdown supports:</p>
+    <div class="formats">
+      <span class="pill">PDF</span>
+      <span class="pill">Word</span>
+      <span class="pill">Excel</span>
+      <span class="pill">PowerPoint</span>
+      <span class="pill">Images (EXIF / OCR)</span>
+      <span class="pill">Audio (transcription)</span>
+      <span class="pill">HTML</span>
+      <span class="pill">CSV / JSON / XML</span>
+      <span class="pill">ZIP archives</span>
+      <span class="pill">EPub</span>
+      <span class="pill">YouTube URLs</span>
+      <span class="pill">Web pages</span>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>Install &amp; run</h2>
+    <p class="section-lead">Requires Python 3.10+. No packaged installer yet — clone and run.</p>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-target="win">Windows</button>
+      <button class="tab" role="tab" aria-selected="false" data-target="mac">macOS / Linux</button>
+    </div>
+
+    <div class="tab-panel active" id="win">
+<pre>git clone https://github.com/andrest04/markitdown-desktop.git
+cd markitdown-desktop
+python -m pip install -r requirements.txt
+run.bat</pre>
+    </div>
+    <div class="tab-panel" id="mac">
+<pre>git clone https://github.com/andrest04/markitdown-desktop.git
+cd markitdown-desktop
+python3 -m pip install -r requirements.txt
+./run.sh</pre>
+    </div>
+  </section>
+
+  <div class="disclaimer">
+    This is an independent, community-built GUI. It is <strong>not</strong> developed,
+    maintained, or endorsed by Microsoft. It wraps the open-source
+    <a href="https://github.com/microsoft/markitdown">markitdown</a> package (MIT License) —
+    all credit for the underlying conversion engine goes to Microsoft and its contributors.
+  </div>
+
+</main>
+
+<footer>
+  <p>MarkItDown Desktop — MIT Licensed</p>
+  <p><a href="https://github.com/andrest04/markitdown-desktop">GitHub</a> · <a href="https://github.com/microsoft/markitdown">markitdown (Microsoft)</a></p>
+</footer>
+
+<script>
+  document.querySelectorAll(".tab").forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      document.querySelectorAll(".tab").forEach(function (t) { t.setAttribute("aria-selected", "false"); });
+      document.querySelectorAll(".tab-panel").forEach(function (p) { p.classList.remove("active"); });
+      tab.setAttribute("aria-selected", "true");
+      document.getElementById(tab.dataset.target).classList.add("active");
+    });
+  });
+</script>
+
+</body>
+</html>
