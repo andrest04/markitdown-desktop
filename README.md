@@ -1,6 +1,8 @@
 # MarkItDown Desktop (Unofficial)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/andrest04/markitdown-desktop)](https://github.com/andrest04/markitdown-desktop/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)](#requirements)
 
 A native PySide6 desktop GUI around Microsoft's
 [`markitdown`](https://github.com/microsoft/markitdown) Python package.
@@ -8,11 +10,19 @@ The core flow is intentionally simple: **drop a file (or paste a URL) and
 it converts and saves itself to your Downloads folder automatically** — no
 manual "export" step required.
 
+> [!IMPORTANT]
+> This app converts files with the privileges of the account running it,
+> the same way `markitdown` itself does. Only convert files and URLs you
+> trust. See [SECURITY.md](SECURITY.md) for the full policy.
+
 > This is an independent, community-built GUI. It is **not** developed,
 > maintained, or endorsed by Microsoft. See [Credits & License](#credits--license)
 > below.
 
 ![MarkItDown Desktop screenshot](assets/screenshot.png)
+
+**[🌐 Website](https://andrest04.github.io/markitdown-desktop/)** ·
+**[⬇️ Latest release](https://github.com/andrest04/markitdown-desktop/releases/latest)**
 
 ## Features
 
@@ -99,6 +109,18 @@ app/core/converter.py      MarkItDown wrapper, background worker, auto-save logi
 app/core/queue_model.py    queue table data model
 app/i18n.py                English/Spanish translation layer
 ```
+
+## Contributing
+
+Contributions and suggestions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for how to get set up and the project's conventions. This project follows
+the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+|            | Link                                                              |
+| ---------- | ------------------------------------------------------------------ |
+| **Issues** | [Open an issue](https://github.com/andrest04/markitdown-desktop/issues) |
+| **PRs**    | [Open pull requests](https://github.com/andrest04/markitdown-desktop/pulls) |
+| **Security** | See [SECURITY.md](SECURITY.md) for how to report vulnerabilities privately |
 
 ## Credits & License
 
