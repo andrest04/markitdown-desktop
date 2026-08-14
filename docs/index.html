@@ -20,6 +20,7 @@
     --code-bg: #1e2126;
     --code-text: #e6e8eb;
     --shadow: 0 1px 2px rgba(20, 24, 32, 0.06), 0 12px 28px -8px rgba(20, 24, 32, 0.16);
+    --link-text: #1f4fc9;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -36,6 +37,7 @@
       --code-bg: #17191d;
       --code-text: #e6e8eb;
       --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 32px -8px rgba(0, 0, 0, 0.45);
+      --link-text: #6c9dfb;
     }
   }
   :root[data-theme="dark"] {
@@ -43,12 +45,14 @@
     --text-muted: #9aa3b0; --border: #34383f; --accent: #3d7bf5; --accent-hover: #5a90f7;
     --accent-tint: #1f2b40; --accent-text: #ffffff; --code-bg: #17191d; --code-text: #e6e8eb;
     --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 16px 32px -8px rgba(0,0,0,0.45);
+    --link-text: #6c9dfb;
   }
   :root[data-theme="light"] {
     --bg: #f5f6f8; --bg-elevated: #ffffff; --bg-muted: #eceff3; --text: #1d1f21;
     --text-muted: #5b6472; --border: #dcdfe4; --accent: #2f6fed; --accent-hover: #4a82f0;
     --accent-tint: #e9f0ff; --accent-text: #ffffff; --code-bg: #1e2126; --code-text: #e6e8eb;
     --shadow: 0 1px 2px rgba(20,24,32,0.06), 0 12px 28px -8px rgba(20,24,32,0.16);
+    --link-text: #1f4fc9;
   }
 
   * { box-sizing: border-box; }
@@ -61,7 +65,7 @@
     -webkit-font-smoothing: antialiased;
   }
   main { max-width: 920px; margin: 0 auto; padding: 0 24px; }
-  a { color: var(--accent); }
+  a { color: var(--link-text); }
   a:focus-visible, button:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px;
   }
@@ -75,6 +79,12 @@
     .hero-animate:nth-child(2) { animation-delay: 0.05s; }
     .hero-animate:nth-child(3) { animation-delay: 0.1s; }
     .hero-animate:nth-child(4) { animation-delay: 0.15s; }
+
+    .reveal, .screenshot-frame { opacity: 0; transform: translateY(12px); }
+    .reveal.in-view, .screenshot-frame.in-view {
+      opacity: 1; transform: translateY(0);
+      transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
   }
 
   /* Nav */
@@ -84,9 +94,17 @@
   }
   .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 1.02rem; text-decoration: none; color: var(--text); }
   .brand .dot { width: 9px; height: 9px; border-radius: 3px; background: var(--accent); display: inline-block; flex: none; }
-  .nav-links { display: flex; gap: 22px; font-size: 0.9rem; }
-  .nav-links a { color: var(--text-muted); text-decoration: none; }
+  .nav-links { display: flex; align-items: center; gap: 22px; font-size: 0.9rem; }
+  .nav-links a { color: var(--text-muted); text-decoration: none; transition: color 0.15s ease; }
   .nav-links a:hover { color: var(--accent); }
+  .nav-star { display: inline-flex; align-items: center; gap: 3px; }
+  .nav-star .star-count { font-variant-numeric: tabular-nums; }
+  .lang-toggle {
+    background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-muted);
+    border-radius: 6px; padding: 4px 9px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease;
+  }
+  .lang-toggle:hover { color: var(--accent); background: var(--bg-muted); }
 
   /* Hero */
   .hero { text-align: center; padding: 64px 0 44px; }
@@ -97,9 +115,10 @@
   .hero p.lead {
     color: var(--text-muted); font-size: 1.12rem; max-width: 560px; margin: 0 auto 30px;
   }
-  .badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 30px; }
-  .badges img { display: block; height: 20px; }
+  .badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 16px 0 0; opacity: 0.85; }
+  .badges img { display: block; height: 16px; }
   .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .cta-note { color: var(--text-muted); font-size: 0.82rem; margin: 14px 0 0; }
   .btn {
     display: inline-flex; align-items: center; gap: 8px;
     padding: 12px 22px; border-radius: 8px; font-weight: 600; font-size: 0.95rem;
@@ -110,13 +129,6 @@
   .btn-primary:hover { background: var(--accent-hover); }
   .btn-secondary { background: var(--bg-elevated); color: var(--text); border-color: var(--border); }
   .btn-secondary:hover { background: var(--bg-muted); }
-  .btn-star { background: var(--bg-elevated); color: var(--text); border-color: var(--border); }
-  .btn-star:hover { background: var(--bg-muted); }
-  .btn-star svg { width: 16px; height: 16px; fill: #e3b341; flex: none; }
-  .btn-star .star-count {
-    color: var(--text-muted); font-weight: 600; font-variant-numeric: tabular-nums;
-    border-left: 1px solid var(--border); margin-left: 2px; padding-left: 10px;
-  }
 
   /* Screenshot */
   .screenshot-frame {
@@ -185,6 +197,26 @@
   .tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
+  @media (prefers-reduced-motion: no-preference) {
+    .tab-panel.active { opacity: 0; transition: opacity 0.15s ease; }
+    .tab-panel.active.in { opacity: 1; }
+  }
+
+  .source-heading { font-size: 1.1rem; color: var(--text-muted); margin: 0 0 4px; }
+  .source-note { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 20px; }
+
+  .download-list {
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 14px;
+    padding: 6px 24px; margin-bottom: 28px;
+  }
+  .download-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 16px 0;
+  }
+  .download-row + .download-row { border-top: 1px solid var(--border); }
+  .download-row .platform { font-weight: 600; font-size: 0.96rem; }
+  .download-row .platform-note { color: var(--text-muted); font-size: 0.85rem; margin: 2px 0 0; }
+  .download-row .btn { flex: none; padding: 9px 16px; font-size: 0.88rem; }
   pre {
     background: var(--code-bg); color: var(--code-text); border-radius: 8px;
     padding: 16px; overflow-x: auto; font-size: 0.86rem; margin: 0 0 10px;
@@ -198,7 +230,7 @@
     color: var(--text-muted); font-size: 0.88rem; text-align: center;
   }
   footer p { margin: 0 0 6px; }
-  footer a { color: var(--text-muted); text-decoration: underline; }
+  footer a { color: var(--text-muted); text-decoration: underline; transition: color 0.15s ease; }
 
   .disclaimer {
     background: var(--bg-muted); border: 1px solid var(--border); border-radius: 10px;
@@ -211,133 +243,157 @@
 <nav class="nav">
   <a class="brand" href="#top"><span class="dot"></span>MarkItDown Desktop</a>
   <div class="nav-links">
-    <a href="#features">Features</a>
-    <a href="#formats">Formats</a>
-    <a href="#install">Install</a>
+    <a href="#features" data-i18n="nav.features">Features</a>
+    <a href="#how-it-works" data-i18n="nav.how">How it works</a>
+    <a href="#formats" data-i18n="nav.formats">Formats</a>
+    <a href="#install" data-i18n="nav.install">Install</a>
     <a href="https://github.com/andrest04/markitdown-desktop">GitHub</a>
+    <a class="nav-star" id="navStar" href="https://github.com/andrest04/markitdown-desktop" aria-label="Star this project on GitHub" data-i18n-aria-label="nav.starAriaLabel">
+      GitHub ★ <span class="star-count" id="starCount" aria-hidden="true"></span>
+    </a>
+    <button class="lang-toggle" id="langToggle" type="button" aria-label="Switch language"></button>
   </div>
 </nav>
 
 <main id="top">
 
   <section class="hero">
-    <h1 class="hero-animate">Drop a file. Get Markdown. Done.</h1>
-    <p class="lead hero-animate">
+    <h1 class="hero-animate" data-i18n="hero.title">Drop a file. Get Markdown. Done.</h1>
+    <p class="lead hero-animate" data-i18n-html="hero.lead">
       A free, open-source desktop app for Microsoft's <code>markitdown</code>.
       Drag any file or paste a URL — it converts and saves straight to your
       Downloads folder. No manual export step, no CLI required.
     </p>
+    <div class="cta-row hero-animate">
+      <a class="btn btn-primary" href="https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop.exe" data-i18n="cta.windows">Download for Windows (.exe)</a>
+      <a class="btn btn-secondary" href="https://github.com/andrest04/markitdown-desktop/releases/latest" data-i18n="cta.other">Download for macOS / Linux</a>
+    </div>
+    <p class="cta-note hero-animate" data-i18n="cta.note">Unofficial, open-source — not affiliated with Microsoft.</p>
     <div class="badges hero-animate">
       <a href="https://github.com/andrest04/markitdown-desktop/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
       <a href="https://github.com/andrest04/markitdown-desktop/releases"><img src="https://img.shields.io/github/v/release/andrest04/markitdown-desktop" alt="Latest release"></a>
       <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational" alt="Cross-platform">
     </div>
-    <div class="cta-row hero-animate">
-      <a class="btn btn-primary" href="https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop.exe">Download for Windows (.exe)</a>
-      <a class="btn btn-secondary" href="https://github.com/andrest04/markitdown-desktop/releases/latest">macOS / Linux</a>
-      <a class="btn btn-star" href="https://github.com/andrest04/markitdown-desktop" aria-label="Star this project on GitHub">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.79L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.193L.818 6.375a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
-        Star on GitHub
-        <span class="star-count" id="starCount" aria-hidden="true"></span>
-      </a>
-    </div>
   </section>
 
   <div class="screenshot-frame">
-    <img src="demo.gif" alt="MarkItDown Desktop walkthrough: add a file, it converts, the rendered markdown preview appears" loading="lazy">
+    <img src="demo.gif" alt="MarkItDown Desktop walkthrough: add a file, it converts, the rendered markdown preview appears" data-i18n-alt="screenshot.alt" loading="lazy">
   </div>
 
-  <section id="features">
-    <h2>Why this exists</h2>
-    <p class="section-lead">markitdown is a great converter, but it's a command-line tool. This wraps the same engine in an interface anyone can use.</p>
+  <section id="features" class="reveal">
+    <h2 data-i18n="features.title">Why this exists</h2>
+    <p class="section-lead" data-i18n-html="features.lead">markitdown itself is a command-line tool — you run it, redirect output, manage files yourself. This wraps the same engine with no export step: drop a file and the <code>.md</code> lands in Downloads the moment it converts.</p>
 
     <div class="feature-layout">
       <div class="feature-primary">
         <span class="path-chip">~/Downloads/report.md</span>
-        <h3>Auto-saves to Downloads — always</h3>
-        <p>The moment a file finishes converting, the <code>.md</code> lands in your Downloads folder under its original name. Name collisions get a safe numeric suffix instead of overwriting anything. No export dialog to remember.</p>
+        <h3 data-i18n="features.primary.title">Auto-saves to Downloads — always</h3>
+        <p data-i18n-html="features.primary.body">The moment a file finishes converting, the <code>.md</code> lands in your Downloads folder under its original name. Name collisions get a safe numeric suffix instead of overwriting anything. No export dialog to remember.</p>
       </div>
 
       <div class="feature-list">
         <div class="feature-row">
           <span class="mark">→</span>
-          <div><h3>Drop and done</h3><p>Drag, click to browse, or paste a URL — conversion starts immediately.</p></div>
+          <div><h3 data-i18n="features.list.1.title">Live preview</h3><p data-i18n="features.list.1.body">Rendered or raw Markdown, editable before saving a copy elsewhere.</p></div>
         </div>
         <div class="feature-row">
           <span class="mark">→</span>
-          <div><h3>Live preview</h3><p>Rendered or raw Markdown, editable before saving a copy elsewhere.</p></div>
+          <div><h3 data-i18n="features.list.2.title">Light &amp; dark themes</h3><p data-i18n="features.list.2.body">Follows your system automatically, or switch manually.</p></div>
         </div>
         <div class="feature-row">
           <span class="mark">→</span>
-          <div><h3>Light &amp; dark themes</h3><p>Follows your system automatically, or switch manually.</p></div>
+          <div><h3 data-i18n="features.list.3.title">English &amp; Spanish</h3><p data-i18n="features.list.3.body">Switch live from the menu bar — no restart needed.</p></div>
         </div>
         <div class="feature-row">
           <span class="mark">→</span>
-          <div><h3>English &amp; Spanish</h3><p>Switch live from the menu bar — no restart needed.</p></div>
-        </div>
-        <div class="feature-row">
-          <span class="mark">→</span>
-          <div><h3>Advanced options, out of the way</h3><p>Plugins, Azure Document Intelligence, and format hints live in a separate settings dialog.</p></div>
+          <div><h3 data-i18n="features.list.4.title">Advanced options, out of the way</h3><p data-i18n="features.list.4.body">Plugins, Azure Document Intelligence, and format hints live in a separate settings dialog.</p></div>
         </div>
       </div>
     </div>
   </section>
 
-  <section>
-    <h2>How it works</h2>
+  <section id="how-it-works" class="reveal">
+    <h2 data-i18n="how.title">How it works</h2>
     <div class="flow">
       <div class="flow-step">
-        <h3>Drop a file</h3>
-        <p>Or click the drop zone to browse, or paste a URL.</p>
+        <h3 data-i18n="how.1.title">Drop a file</h3>
+        <p data-i18n="how.1.body">Or click the drop zone to browse, or paste a URL.</p>
       </div>
       <div class="flow-arrow" aria-hidden="true">→</div>
       <div class="flow-step">
-        <h3>It converts</h3>
-        <p>Runs in the background — the UI never freezes, even on large batches.</p>
+        <h3 data-i18n="how.2.title">It converts</h3>
+        <p data-i18n="how.2.body">Runs in the background — the UI never freezes, even on large batches.</p>
       </div>
       <div class="flow-arrow" aria-hidden="true">→</div>
       <div class="flow-step">
-        <h3>Find it in Downloads</h3>
-        <p>The <code>.md</code> file is already there. Double-click the row to open its folder.</p>
+        <h3 data-i18n="how.3.title">Find it in Downloads</h3>
+        <p data-i18n-html="how.3.body">The <code>.md</code> file is already there. Double-click the row to open its folder.</p>
       </div>
     </div>
   </section>
 
-  <section id="formats">
-    <h2>Supported formats</h2>
-    <p class="section-lead">Anything markitdown supports:</p>
+  <section id="formats" class="reveal">
+    <h2 data-i18n="formats.title">Supported formats</h2>
+    <p class="section-lead" data-i18n="formats.lead">Anything markitdown supports:</p>
     <div class="formats">
       <span class="pill">PDF</span>
       <span class="pill">Word</span>
       <span class="pill">Excel</span>
       <span class="pill">PowerPoint</span>
-      <span class="pill">Images (EXIF / OCR)</span>
-      <span class="pill">Audio (transcription)</span>
+      <span class="pill" data-i18n="formats.images">Images (EXIF / OCR)</span>
+      <span class="pill" data-i18n="formats.audio">Audio (transcription)</span>
       <span class="pill">HTML</span>
       <span class="pill">CSV / JSON / XML</span>
-      <span class="pill">ZIP archives</span>
+      <span class="pill" data-i18n="formats.zip">ZIP archives</span>
       <span class="pill">EPub</span>
-      <span class="pill">YouTube URLs</span>
-      <span class="pill">Web pages</span>
+      <span class="pill" data-i18n="formats.youtube">YouTube URLs</span>
+      <span class="pill" data-i18n="formats.web">Web pages</span>
     </div>
   </section>
 
-  <section id="install">
-    <h2>Install &amp; run</h2>
-    <p class="section-lead">Requires Python 3.10+. No packaged installer yet — clone and run.</p>
+  <section id="install" class="reveal">
+    <h2 data-i18n="install.title">Install &amp; run</h2>
+    <p class="section-lead" data-i18n="install.lead">Grab a ready-to-run build for your platform, or run from source.</p>
 
-    <div class="tabs" role="tablist">
-      <button class="tab" role="tab" aria-selected="true" data-target="win">Windows</button>
-      <button class="tab" role="tab" aria-selected="false" data-target="mac">macOS / Linux</button>
+    <div class="download-list">
+      <div class="download-row">
+        <div>
+          <p class="platform">Windows</p>
+          <p class="platform-note" data-i18n="download.windows.note">Installer or standalone .exe — no Python required.</p>
+        </div>
+        <a class="btn btn-secondary" href="https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop.exe" data-i18n="download.exe.button">Download .exe</a>
+      </div>
+      <div class="download-row">
+        <div>
+          <p class="platform">macOS</p>
+          <p class="platform-note" data-i18n="download.bundle.note">Packaged app bundle, zipped.</p>
+        </div>
+        <a class="btn btn-secondary" href="https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop-macos.zip" data-i18n="download.zip.button">Download .zip</a>
+      </div>
+      <div class="download-row">
+        <div>
+          <p class="platform">Linux</p>
+          <p class="platform-note" data-i18n="download.bundle.note">Packaged app bundle, zipped.</p>
+        </div>
+        <a class="btn btn-secondary" href="https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop-linux.zip" data-i18n="download.zip.button">Download .zip</a>
+      </div>
     </div>
 
-    <div class="tab-panel active" id="win">
+    <h3 class="source-heading" data-i18n="install.source.heading">Run from source</h3>
+    <p class="source-note" data-i18n="install.source.note">For contributors or other platforms. Requires Python 3.10+.</p>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" id="tab-win" role="tab" aria-selected="true" aria-controls="panel-win" tabindex="0" data-target="panel-win">Windows</button>
+      <button class="tab" id="tab-mac" role="tab" aria-selected="false" aria-controls="panel-mac" tabindex="-1" data-target="panel-mac">macOS / Linux</button>
+    </div>
+
+    <div class="tab-panel active" id="panel-win" role="tabpanel" aria-labelledby="tab-win">
 <pre>git clone https://github.com/andrest04/markitdown-desktop.git
 cd markitdown-desktop
 python -m pip install -r requirements.txt
 run.bat</pre>
     </div>
-    <div class="tab-panel" id="mac">
+    <div class="tab-panel" id="panel-mac" role="tabpanel" aria-labelledby="tab-mac">
 <pre>git clone https://github.com/andrest04/markitdown-desktop.git
 cd markitdown-desktop
 python3 -m pip install -r requirements.txt
@@ -345,7 +401,7 @@ python3 -m pip install -r requirements.txt
     </div>
   </section>
 
-  <div class="disclaimer">
+  <div class="disclaimer" data-i18n-html="disclaimer.body">
     This is an independent, community-built GUI. It is <strong>not</strong> developed,
     maintained, or endorsed by Microsoft. It wraps the open-source
     <a href="https://github.com/microsoft/markitdown">markitdown</a> package (MIT License) —
@@ -355,19 +411,200 @@ python3 -m pip install -r requirements.txt
 </main>
 
 <footer>
-  <p>MarkItDown Desktop — MIT Licensed</p>
+  <p data-i18n="footer.license">MarkItDown Desktop — MIT Licensed</p>
   <p><a href="https://github.com/andrest04/markitdown-desktop">GitHub</a> · <a href="https://github.com/microsoft/markitdown">markitdown (Microsoft)</a></p>
 </footer>
 
 <script>
-  document.querySelectorAll(".tab").forEach(function (tab) {
-    tab.addEventListener("click", function () {
-      document.querySelectorAll(".tab").forEach(function (t) { t.setAttribute("aria-selected", "false"); });
-      document.querySelectorAll(".tab-panel").forEach(function (p) { p.classList.remove("active"); });
+  var TRANSLATIONS = {
+    en: {
+      "nav.features": "Features",
+      "nav.how": "How it works",
+      "nav.formats": "Formats",
+      "nav.install": "Install",
+      "nav.starAriaLabel": "Star this project on GitHub",
+      "hero.title": "Drop a file. Get Markdown. Done.",
+      "hero.lead": "A free, open-source desktop app for Microsoft's <code>markitdown</code>. Drag any file or paste a URL — it converts and saves straight to your Downloads folder. No manual export step, no CLI required.",
+      "cta.windows": "Download for Windows (.exe)",
+      "cta.other": "Download for macOS / Linux",
+      "cta.note": "Unofficial, open-source — not affiliated with Microsoft.",
+      "screenshot.alt": "MarkItDown Desktop walkthrough: add a file, it converts, the rendered markdown preview appears",
+      "features.title": "Why this exists",
+      "features.lead": "markitdown itself is a command-line tool — you run it, redirect output, manage files yourself. This wraps the same engine with no export step: drop a file and the <code>.md</code> lands in Downloads the moment it converts.",
+      "features.primary.title": "Auto-saves to Downloads — always",
+      "features.primary.body": "The moment a file finishes converting, the <code>.md</code> lands in your Downloads folder under its original name. Name collisions get a safe numeric suffix instead of overwriting anything. No export dialog to remember.",
+      "features.list.1.title": "Live preview",
+      "features.list.1.body": "Rendered or raw Markdown, editable before saving a copy elsewhere.",
+      "features.list.2.title": "Light & dark themes",
+      "features.list.2.body": "Follows your system automatically, or switch manually.",
+      "features.list.3.title": "English & Spanish",
+      "features.list.3.body": "Switch live from the menu bar — no restart needed.",
+      "features.list.4.title": "Advanced options, out of the way",
+      "features.list.4.body": "Plugins, Azure Document Intelligence, and format hints live in a separate settings dialog.",
+      "how.title": "How it works",
+      "how.1.title": "Drop a file",
+      "how.1.body": "Or click the drop zone to browse, or paste a URL.",
+      "how.2.title": "It converts",
+      "how.2.body": "Runs in the background — the UI never freezes, even on large batches.",
+      "how.3.title": "Find it in Downloads",
+      "how.3.body": "The <code>.md</code> file is already there. Double-click the row to open its folder.",
+      "formats.title": "Supported formats",
+      "formats.lead": "Anything markitdown supports:",
+      "formats.images": "Images (EXIF / OCR)",
+      "formats.audio": "Audio (transcription)",
+      "formats.zip": "ZIP archives",
+      "formats.youtube": "YouTube URLs",
+      "formats.web": "Web pages",
+      "install.title": "Install & run",
+      "install.lead": "Grab a ready-to-run build for your platform, or run from source.",
+      "download.windows.note": "Installer or standalone .exe — no Python required.",
+      "download.bundle.note": "Packaged app bundle, zipped.",
+      "download.exe.button": "Download .exe",
+      "download.zip.button": "Download .zip",
+      "install.source.heading": "Run from source",
+      "install.source.note": "For contributors or other platforms. Requires Python 3.10+.",
+      "disclaimer.body": "This is an independent, community-built GUI. It is <strong>not</strong> developed, maintained, or endorsed by Microsoft. It wraps the open-source <a href=\"https://github.com/microsoft/markitdown\">markitdown</a> package (MIT License) — all credit for the underlying conversion engine goes to Microsoft and its contributors.",
+      "footer.license": "MarkItDown Desktop — MIT Licensed",
+      "lang.switchTo": "ES",
+    },
+    es: {
+      "nav.features": "Funciones",
+      "nav.how": "Cómo funciona",
+      "nav.formats": "Formatos",
+      "nav.install": "Instalación",
+      "nav.starAriaLabel": "Marca este proyecto con una estrella en GitHub",
+      "hero.title": "Suelta un archivo. Obtén Markdown. Listo.",
+      "hero.lead": "Una aplicación de escritorio gratuita y de código abierto para <code>markitdown</code> de Microsoft. Arrastra cualquier archivo o pega una URL — se convierte y se guarda directamente en tu carpeta de Descargas. Sin pasos de exportación manual, sin necesidad de la línea de comandos.",
+      "cta.windows": "Descargar para Windows (.exe)",
+      "cta.other": "Descargar para macOS / Linux",
+      "cta.note": "No oficial, de código abierto — no afiliado con Microsoft.",
+      "screenshot.alt": "Recorrido de MarkItDown Desktop: se añade un archivo, se convierte y aparece la vista previa del markdown renderizado",
+      "features.title": "Por qué existe",
+      "features.lead": "markitdown en sí es una herramienta de línea de comandos — la ejecutas, rediriges la salida y gestionas los archivos tú mismo. Esta aplicación envuelve el mismo motor sin pasos de exportación: suelta un archivo y el <code>.md</code> llega a Descargas en el momento en que se convierte.",
+      "features.primary.title": "Guarda automáticamente en Descargas — siempre",
+      "features.primary.body": "En cuanto un archivo termina de convertirse, el <code>.md</code> llega a tu carpeta de Descargas con su nombre original. Las colisiones de nombre reciben un sufijo numérico seguro en lugar de sobrescribir nada. No hay que recordar ningún cuadro de exportación.",
+      "features.list.1.title": "Vista previa en vivo",
+      "features.list.1.body": "Markdown renderizado o en bruto, editable antes de guardar una copia en otro lugar.",
+      "features.list.2.title": "Temas claro y oscuro",
+      "features.list.2.body": "Sigue tu sistema automáticamente, o cambia manualmente.",
+      "features.list.3.title": "Inglés y español",
+      "features.list.3.body": "Cambia en vivo desde la barra de menú — sin necesidad de reiniciar.",
+      "features.list.4.title": "Opciones avanzadas, fuera del camino",
+      "features.list.4.body": "Los plugins, Azure Document Intelligence y las sugerencias de formato viven en un cuadro de configuración aparte.",
+      "how.title": "Cómo funciona",
+      "how.1.title": "Suelta un archivo",
+      "how.1.body": "O haz clic en la zona de arrastre para explorar, o pega una URL.",
+      "how.2.title": "Se convierte",
+      "how.2.body": "Se ejecuta en segundo plano — la interfaz nunca se congela, incluso con lotes grandes.",
+      "how.3.title": "Encuéntralo en Descargas",
+      "how.3.body": "El archivo <code>.md</code> ya está ahí. Haz doble clic en la fila para abrir su carpeta.",
+      "formats.title": "Formatos compatibles",
+      "formats.lead": "Todo lo que markitdown admite:",
+      "formats.images": "Imágenes (EXIF / OCR)",
+      "formats.audio": "Audio (transcripción)",
+      "formats.zip": "Archivos ZIP",
+      "formats.youtube": "URLs de YouTube",
+      "formats.web": "Páginas web",
+      "install.title": "Instalación y ejecución",
+      "install.lead": "Obtén una compilación lista para usar en tu plataforma, o ejecútalo desde el código fuente.",
+      "download.windows.note": "Instalador o .exe independiente — no requiere Python.",
+      "download.bundle.note": "Paquete de aplicación empaquetado, comprimido.",
+      "download.exe.button": "Descargar .exe",
+      "download.zip.button": "Descargar .zip",
+      "install.source.heading": "Ejecutar desde el código fuente",
+      "install.source.note": "Para colaboradores u otras plataformas. Requiere Python 3.10+.",
+      "disclaimer.body": "Esta es una interfaz gráfica independiente, construida por la comunidad. <strong>No</strong> está desarrollada, mantenida ni respaldada por Microsoft. Envuelve el paquete de código abierto <a href=\"https://github.com/microsoft/markitdown\">markitdown</a> (licencia MIT) — todo el crédito del motor de conversión subyacente es de Microsoft y sus colaboradores.",
+      "footer.license": "MarkItDown Desktop — Licencia MIT",
+      "lang.switchTo": "EN",
+    },
+  };
+
+  (function () {
+    var STORAGE_KEY = "markitdown-desktop-landing-lang";
+    var toggle = document.getElementById("langToggle");
+
+    function detectInitialLang() {
+      var stored = null;
+      try { stored = localStorage.getItem(STORAGE_KEY); } catch (e) { /* storage unavailable */ }
+      if (stored === "en" || stored === "es") return stored;
+      return navigator.language && navigator.language.toLowerCase().indexOf("es") === 0 ? "es" : "en";
+    }
+
+    function applyLang(lang) {
+      var dict = TRANSLATIONS[lang] || TRANSLATIONS.en;
+      document.documentElement.lang = lang;
+
+      document.querySelectorAll("[data-i18n]").forEach(function (el) {
+        var key = el.getAttribute("data-i18n");
+        if (dict[key]) el.textContent = dict[key];
+      });
+      document.querySelectorAll("[data-i18n-html]").forEach(function (el) {
+        var key = el.getAttribute("data-i18n-html");
+        if (dict[key]) el.innerHTML = dict[key];
+      });
+      document.querySelectorAll("[data-i18n-alt]").forEach(function (el) {
+        var key = el.getAttribute("data-i18n-alt");
+        if (dict[key]) el.setAttribute("alt", dict[key]);
+      });
+      document.querySelectorAll("[data-i18n-aria-label]").forEach(function (el) {
+        var key = el.getAttribute("data-i18n-aria-label");
+        if (dict[key]) el.setAttribute("aria-label", dict[key]);
+      });
+
+      if (toggle) toggle.textContent = dict["lang.switchTo"];
+      toggle.setAttribute("aria-label", lang === "en" ? "Switch to Spanish" : "Cambiar a inglés");
+
+      try { localStorage.setItem(STORAGE_KEY, lang); } catch (e) { /* storage unavailable */ }
+    }
+
+    var currentLang = detectInitialLang();
+    applyLang(currentLang);
+
+    if (toggle) {
+      toggle.addEventListener("click", function () {
+        currentLang = currentLang === "en" ? "es" : "en";
+        applyLang(currentLang);
+      });
+    }
+  })();
+
+  (function () {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll(".tab"));
+
+    function activateTab(tab, focusTab) {
+      tabs.forEach(function (t) {
+        t.setAttribute("aria-selected", "false");
+        t.setAttribute("tabindex", "-1");
+      });
+      document.querySelectorAll(".tab-panel").forEach(function (p) {
+        p.classList.remove("active", "in");
+      });
       tab.setAttribute("aria-selected", "true");
-      document.getElementById(tab.dataset.target).classList.add("active");
+      tab.setAttribute("tabindex", "0");
+      if (focusTab) tab.focus();
+
+      var panel = document.getElementById(tab.dataset.target);
+      panel.classList.add("active");
+      // Defer the opacity flip a frame so the display swap above is committed
+      // first — this is what makes the cross-fade transition actually run.
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { panel.classList.add("in"); });
+      });
+    }
+
+    tabs.forEach(function (tab, i) {
+      tab.addEventListener("click", function () { activateTab(tab, false); });
+      tab.addEventListener("keydown", function (e) {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        var next = e.key === "ArrowRight" ? (i + 1) % tabs.length : (i - 1 + tabs.length) % tabs.length;
+        activateTab(tabs[next], true);
+      });
     });
-  });
+
+    var initialPanel = document.querySelector(".tab-panel.active");
+    if (initialPanel) requestAnimationFrame(function () { initialPanel.classList.add("in"); });
+  })();
 
   (function () {
     var el = document.getElementById("starCount");
@@ -383,6 +620,23 @@ python3 -m pip install -r requirements.txt
         el.textContent = n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
       })
       .catch(function () { /* offline or rate-limited: button still works without a count */ });
+  })();
+
+  (function () {
+    var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion || !("IntersectionObserver" in window)) return;
+
+    var targets = document.querySelectorAll(".reveal, .screenshot-frame");
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("in-view");
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1 });
+
+    targets.forEach(function (el) { observer.observe(el); });
   })();
 </script>
 
