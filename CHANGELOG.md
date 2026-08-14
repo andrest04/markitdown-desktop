@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-08-13
+
+### Added
+
+- Release workflow: Windows builds now also produce a standalone
+  single-file `markitdown-desktop.exe`, attached to the GitHub Release
+  alongside the existing zipped binaries — no extraction needed to run it.
+
 ## [1.2.0] - 2026-07-24
 
 ### Added
@@ -54,7 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "open containing folder" dispatches to `explorer`/`open -R`/`xdg-open`
   per OS.
 
-[Unreleased]: https://github.com/andrest04/markitdown-desktop/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/andrest04/markitdown-desktop/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/andrest04/markitdown-desktop/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/andrest04/markitdown-desktop/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/andrest04/markitdown-desktop/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/andrest04/markitdown-desktop/releases/tag/v1.0.0
