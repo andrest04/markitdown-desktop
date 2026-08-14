@@ -67,6 +67,19 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path dist/markitdown-desktop/* -DestinationPath markitdown-desktop-windows.zip
 
+      - name: Build installer with Inno Setup (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y
+            $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          }
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          & $iscc "/DMyAppVersion=$version" installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Package (macOS / Linux)
         if: runner.os != 'Windows'
         shell: bash
@@ -80,4 +93,5 @@ jobs:
           files: |
             markitdown-desktop-${{ matrix.asset_name }}.zip
             dist-onefile/markitdown-desktop.exe
+            dist-installer/markitdown-desktop-setup.exe
           generate_release_notes: true

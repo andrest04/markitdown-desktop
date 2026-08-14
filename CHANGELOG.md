@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Windows installer (`markitdown-desktop-setup.exe`), built with Inno Setup
+  and attached to each GitHub Release alongside the existing portable
+  `.exe` and zipped build. Installs per-user (no admin rights required),
+  adds a Start Menu shortcut, an optional desktop shortcut, and a proper
+  uninstaller.
+
 ## [1.3.0] - 2026-08-13
 
 ### Added

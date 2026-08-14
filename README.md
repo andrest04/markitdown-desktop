@@ -75,8 +75,13 @@ up-to-date list.
 
 ## Download a pre-built binary (no Python required)
 
-- **Windows**: [download `markitdown-desktop.exe`](https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop.exe)
-  directly — a single file, no install, no unzip. Just run it.
+- **Windows — Installer (recommended: Start Menu + uninstaller)**:
+  [download `markitdown-desktop-setup.exe`](https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop-setup.exe)
+  and run it — installs per-user (no admin rights needed), adds a Start
+  Menu shortcut, and registers a proper uninstaller.
+- **Windows — Portable .exe (no install, just run it)**:
+  [download `markitdown-desktop.exe`](https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop.exe)
+  directly — a single file, no install, no unzip.
 - **macOS/Linux**: each [release](https://github.com/andrest04/markitdown-desktop/releases/latest)
   includes a ready-to-run zip — download the one for your OS, unzip, and
   run `markitdown-desktop`.
