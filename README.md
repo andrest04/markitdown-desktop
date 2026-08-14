@@ -22,7 +22,8 @@ manual "export" step required.
 ![MarkItDown Desktop walkthrough: add a file, it converts, the rendered markdown preview appears](assets/demo.gif)
 
 **[🌐 Website](https://andrest04.github.io/markitdown-desktop/)** ·
-**[⬇️ Latest release](https://github.com/andrest04/markitdown-desktop/releases/latest)**
+**[⬇️ Download for Windows (.exe)](https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop.exe)** ·
+**[Latest release](https://github.com/andrest04/markitdown-desktop/releases/latest)**
 
 ## Features
 
@@ -74,10 +75,15 @@ up-to-date list.
 
 ## Download a pre-built binary (no Python required)
 
-Each [release](https://github.com/andrest04/markitdown-desktop/releases/latest)
-includes a ready-to-run build for Windows, macOS, and Linux — download the
-zip for your OS, unzip, and run `markitdown-desktop` (or `.exe` on
-Windows). No Python installation needed.
+- **Windows**: [download `markitdown-desktop.exe`](https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop.exe)
+  directly — a single file, no install, no unzip. Just run it.
+- **macOS/Linux**: each [release](https://github.com/andrest04/markitdown-desktop/releases/latest)
+  includes a ready-to-run zip — download the one for your OS, unzip, and
+  run `markitdown-desktop`.
+
+A zipped Windows build (`markitdown-desktop-windows.zip`) is also available
+on the [releases page](https://github.com/andrest04/markitdown-desktop/releases/latest)
+if you prefer that format.
 
 ## Requirements (running from source)
 
