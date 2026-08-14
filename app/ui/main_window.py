@@ -5,21 +5,16 @@ import os
 import subprocess
 import sys
 import webbrowser
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as pkg_version
 
 import markdown as markdown_lib
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QSettings, Qt, QThreadPool
-from PySide6.QtGui import QAction, QColor, QFont, QGuiApplication, QKeySequence
+from PySide6.QtCore import QSettings, Qt, QThreadPool
+from PySide6.QtGui import QAction, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QCheckBox,
     QComboBox,
     QDialog,
-    QDialogButtonBox,
     QFileDialog,
-    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -54,6 +49,9 @@ from app.core.queue_model import (
 )
 from app.i18n import LANG_EN, LANG_ES, tr
 from app.i18n import manager as i18n_manager
+from app.ui.about_dialog import AboutDialog
+from app.ui.advanced_settings_dialog import AdvancedSettingsDialog
+from app.ui.drop_zone import DropZone
 from app.ui.theme import stylesheet_for
 
 ORG_NAME = "andres"
@@ -66,215 +64,6 @@ def detect_system_theme() -> str:
     window_color = palette.color(palette.ColorRole.Window)
     luminance = 0.299 * window_color.red() + 0.587 * window_color.green() + 0.114 * window_color.blue()
     return "dark" if luminance < 128 else "light"
-
-
-EMPTY_HEIGHT = 260
-FILLED_HEIGHT = 90
-
-
-class DropZone(QWidget):
-    """Drag-and-drop target for files and folders; also click-to-browse.
-
-    Big and centered when the queue is empty (the primary, dominant UI
-    surface); shrinks to a slim bar once items exist so the queue table
-    can take over.
-    """
-
-    def __init__(self, on_paths_dropped, on_click=None, parent=None):
-        super().__init__(parent)
-        self.setObjectName("DropZone")
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self._on_paths_dropped = on_paths_dropped
-        self._on_click = on_click
-        self.setAcceptDrops(True)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(EMPTY_HEIGHT)
-        self._prominent = True
-
-        self._shadow = QGraphicsDropShadowEffect(self)
-        self._shadow.setBlurRadius(0)
-        self._shadow.setOffset(0, 0)
-        self._shadow.setColor(QColor(61, 123, 245, 170))
-        self.setGraphicsEffect(self._shadow)
-
-        self._hover_anim = QPropertyAnimation(self._shadow, b"blurRadius", self)
-        self._hover_anim.setDuration(180)
-        self._hover_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-
-        layout = QVBoxLayout(self)
-        self._label = QLabel(tr("dropzone.empty"))
-        self._label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._label.setWordWrap(True)
-        font = self._label.font()
-        font.setPointSize(font.pointSize() + 4)
-        font.setWeight(QFont.Weight.DemiBold)
-        self._label.setFont(font)
-        layout.addWidget(self._label)
-        self.setProperty("dragActive", False)
-
-    def set_prominent(self, prominent: bool) -> None:
-        """Switch between the big "empty queue" look and a slim bar."""
-        self._prominent = prominent
-        self.setMinimumHeight(EMPTY_HEIGHT if prominent else FILLED_HEIGHT)
-        self._label.setText(tr("dropzone.empty") if prominent else tr("dropzone.filled"))
-
-    def retranslate(self) -> None:
-        self.set_prominent(self._prominent)
-
-    def mousePressEvent(self, event) -> None:
-        if self._on_click is not None and event.button() == Qt.MouseButton.LeftButton:
-            self._on_click()
-        super().mousePressEvent(event)
-
-    def enterEvent(self, event) -> None:
-        self._animate_shadow(28)
-        super().enterEvent(event)
-
-    def leaveEvent(self, event) -> None:
-        self._animate_shadow(0)
-        super().leaveEvent(event)
-
-    def _animate_shadow(self, target: int) -> None:
-        self._hover_anim.stop()
-        self._hover_anim.setStartValue(self._shadow.blurRadius())
-        self._hover_anim.setEndValue(target)
-        self._hover_anim.start()
-
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-            self.setProperty("dragActive", True)
-            self.style().unpolish(self)
-            self.style().polish(self)
-
-    def dragLeaveEvent(self, event):
-        self.setProperty("dragActive", False)
-        self.style().unpolish(self)
-        self.style().polish(self)
-
-    def dropEvent(self, event):
-        self.setProperty("dragActive", False)
-        self.style().unpolish(self)
-        self.style().polish(self)
-        paths = [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
-        if paths:
-            self._on_paths_dropped(paths)
-        event.acceptProposedAction()
-
-
-class AboutDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle(tr("about.title"))
-        self.setMinimumWidth(360)
-
-        try:
-            md_version = pkg_version("markitdown")
-        except PackageNotFoundError:
-            from markitdown import __about__
-
-            md_version = getattr(__about__, "__version__", "unknown")
-
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(tr("about.heading")))
-        layout.addWidget(QLabel(tr("about.markitdown_version", version=md_version)))
-        layout.addWidget(QLabel(tr("about.description")))
-
-        link = QLabel('<a href="https://github.com/microsoft/markitdown">github.com/microsoft/markitdown</a>')
-        link.setOpenExternalLinks(True)
-        layout.addWidget(link)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
-        buttons.accepted.connect(self.accept)
-        layout.addWidget(buttons)
-
-
-class AdvancedSettingsDialog(QDialog):
-    """Secondary, opt-in dialog for the markitdown power-user options.
-
-    Kept out of the main window on purpose: the primary flow is
-    "drop a file or paste a URL, done" -- these fields (plugins, Azure
-    Document Intelligence / Content Understanding, per-item stream-info
-    hints) are for the rare cases that need them.
-    """
-
-    def __init__(self, main_window: MainWindow, parent=None):
-        super().__init__(parent)
-        self.main_window = main_window
-        self.setWindowTitle(tr("advanced.title"))
-        self.setMinimumWidth(440)
-
-        layout = QVBoxLayout(self)
-
-        layout.addWidget(QLabel(tr("advanced.conversion_options")))
-        self.enable_plugins_cb = QCheckBox(tr("advanced.enable_plugins"))
-        self.enable_plugins_cb.setChecked(main_window.enable_plugins)
-        layout.addWidget(self.enable_plugins_cb)
-
-        self.keep_data_uris_cb = QCheckBox(tr("advanced.keep_data_uris"))
-        self.keep_data_uris_cb.setChecked(main_window.keep_data_uris)
-        layout.addWidget(self.keep_data_uris_cb)
-
-        self.docintel_cb = QCheckBox(tr("advanced.enable_docintel"))
-        self.docintel_cb.setChecked(main_window.docintel_enabled)
-        layout.addWidget(self.docintel_cb)
-        self.docintel_endpoint_edit = QLineEdit(main_window.docintel_endpoint)
-        self.docintel_endpoint_edit.setPlaceholderText(tr("advanced.docintel_placeholder"))
-        layout.addWidget(self.docintel_endpoint_edit)
-
-        self.cu_cb = QCheckBox(tr("advanced.enable_cu"))
-        self.cu_cb.setChecked(main_window.cu_enabled)
-        layout.addWidget(self.cu_cb)
-        self.cu_endpoint_edit = QLineEdit(main_window.cu_endpoint)
-        self.cu_endpoint_edit.setPlaceholderText(tr("advanced.cu_endpoint_placeholder"))
-        layout.addWidget(self.cu_endpoint_edit)
-        self.cu_analyzer_edit = QLineEdit(main_window.cu_analyzer_id)
-        self.cu_analyzer_edit.setPlaceholderText(tr("advanced.cu_analyzer_placeholder"))
-        layout.addWidget(self.cu_analyzer_edit)
-
-        layout.addWidget(QLabel(tr("advanced.per_item_hints")))
-        row = main_window._selected_row()
-        item = main_window.model.item_at(row)
-        self._target_item = item
-        if item is None:
-            layout.addWidget(QLabel(tr("advanced.select_row_first")))
-            self.extension_override_edit = QLineEdit()
-            self.mimetype_override_edit = QLineEdit()
-            self.charset_override_edit = QLineEdit()
-            for widget in (self.extension_override_edit, self.mimetype_override_edit, self.charset_override_edit):
-                widget.setEnabled(False)
-        else:
-            layout.addWidget(QLabel(tr("advanced.applies_to", name=item.display_name)))
-            self.extension_override_edit = QLineEdit(item.extension_override)
-            self.extension_override_edit.setPlaceholderText(tr("advanced.extension_placeholder"))
-            self.mimetype_override_edit = QLineEdit(item.mimetype_override)
-            self.mimetype_override_edit.setPlaceholderText(tr("advanced.mimetype_placeholder"))
-            self.charset_override_edit = QLineEdit(item.charset_override)
-            self.charset_override_edit.setPlaceholderText(tr("advanced.charset_placeholder"))
-        override_row = QHBoxLayout()
-        override_row.addWidget(self.extension_override_edit)
-        override_row.addWidget(self.mimetype_override_edit)
-        override_row.addWidget(self.charset_override_edit)
-        layout.addLayout(override_row)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
-
-    def apply_to_main_window(self) -> None:
-        mw = self.main_window
-        mw.enable_plugins = self.enable_plugins_cb.isChecked()
-        mw.keep_data_uris = self.keep_data_uris_cb.isChecked()
-        mw.docintel_enabled = self.docintel_cb.isChecked()
-        mw.docintel_endpoint = self.docintel_endpoint_edit.text()
-        mw.cu_enabled = self.cu_cb.isChecked()
-        mw.cu_endpoint = self.cu_endpoint_edit.text()
-        mw.cu_analyzer_id = self.cu_analyzer_edit.text()
-        if self._target_item is not None:
-            self._target_item.extension_override = self.extension_override_edit.text()
-            self._target_item.mimetype_override = self.mimetype_override_edit.text()
-            self._target_item.charset_override = self.charset_override_edit.text()
 
 
 class MainWindow(QMainWindow):

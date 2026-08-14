@@ -35,6 +35,8 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -50,6 +52,15 @@ def sanitize_filename(name: str) -> str:
     """Sanitize a URL/string into a safe base filename (no extension)."""
     name = _ILLEGAL_FILENAME_CHARS.sub("_", name).strip(" .")
     return name[:150] if name else "untitled"
+
+
+def get_markitdown_version() -> str:
+    """Best-effort markitdown package version for display (About dialog)."""
+    try:
+        return pkg_version("markitdown")
+    except PackageNotFoundError:
+        from markitdown import __about__
+        return getattr(__about__, "__version__", "unknown")
 
 
 def url_to_basename(url: str) -> str:
