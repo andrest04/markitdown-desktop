@@ -13,3 +13,4 @@ dist/
 
 # Local Claude Code context — not for the public repo
 CLAUDE.md
+.atl/
