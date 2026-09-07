@@ -32,9 +32,11 @@ class AdvancedSettingsDialog(QDialog):
         super().__init__(parent)
         self.main_window = main_window
         self.setWindowTitle(tr("advanced.title"))
-        self.setMinimumWidth(440)
+        self.setMinimumWidth(480)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(22, 18, 22, 16)
+        layout.setSpacing(10)
 
         layout.addWidget(QLabel(tr("advanced.conversion_options")))
         self.enable_plugins_cb = QCheckBox(tr("advanced.enable_plugins"))

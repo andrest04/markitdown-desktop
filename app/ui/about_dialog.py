@@ -11,14 +11,20 @@ class AboutDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(tr("about.title"))
-        self.setMinimumWidth(360)
+        self.setMinimumWidth(400)
 
         md_version = get_markitdown_version()
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(tr("about.heading")))
+        layout.setContentsMargins(24, 20, 24, 16)
+        layout.setSpacing(8)
+        heading = QLabel(tr("about.heading"))
+        heading.setWordWrap(True)
+        layout.addWidget(heading)
         layout.addWidget(QLabel(tr("about.markitdown_version", version=md_version)))
-        layout.addWidget(QLabel(tr("about.description")))
+        description = QLabel(tr("about.description"))
+        description.setWordWrap(True)
+        layout.addWidget(description)
 
         link = QLabel('<a href="https://github.com/microsoft/markitdown">github.com/microsoft/markitdown</a>')
         link.setOpenExternalLinks(True)

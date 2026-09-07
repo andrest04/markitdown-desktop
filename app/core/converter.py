@@ -34,11 +34,22 @@ from __future__ import annotations
 
 import os
 import re
+import warnings
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 from urllib.parse import urlparse
+
+# pydub (pulled in by markitdown audio converters) warns on import when
+# ffmpeg is missing. Audio transcription is optional; surface real failures
+# at conversion time instead of scaring every startup.
+warnings.filterwarnings(
+    "ignore",
+    message=r"Couldn't find ffmpeg or avconv",
+    category=RuntimeWarning,
+    module=r"pydub\.utils",
+)
 
 from markitdown import MarkItDown, StreamInfo
 from PySide6.QtCore import QObject, QRunnable, Signal
@@ -125,6 +136,17 @@ SUPPORTED_EXTENSIONS = {
     ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif",
     ".mp3", ".wav", ".m4a", ".msg", ".zip", ".epub",
 }
+
+
+def is_supported_file(path: str) -> bool:
+    """True when `path` has an extension markitdown can reasonably convert."""
+    return os.path.splitext(path)[1].lower() in SUPPORTED_EXTENSIONS
+
+
+def supported_name_filter(label: str) -> str:
+    """Qt file-dialog filter that lists only compatible extensions."""
+    patterns = " ".join(f"*{ext}" for ext in sorted(SUPPORTED_EXTENSIONS))
+    return f"{label} ({patterns})"
 
 
 @dataclass

@@ -7,52 +7,52 @@
 <meta name="description" content="An unofficial, open-source desktop GUI for Microsoft's markitdown. Drag a file, get Markdown in your Downloads folder. Windows, macOS, Linux." />
 <style>
   :root {
-    --bg: #f5f6f8;
-    --bg-elevated: #ffffff;
-    --bg-muted: #eceff3;
-    --text: #1d1f21;
-    --text-muted: #5b6472;
-    --border: #dcdfe4;
-    --accent: #2f6fed;
-    --accent-hover: #4a82f0;
-    --accent-tint: #e9f0ff;
-    --accent-text: #ffffff;
-    --code-bg: #1e2126;
-    --code-text: #e6e8eb;
-    --shadow: 0 1px 2px rgba(20, 24, 32, 0.06), 0 12px 28px -8px rgba(20, 24, 32, 0.16);
-    --link-text: #1f4fc9;
+    --bg: #F1F3F0;
+    --bg-elevated: #FBFCFB;
+    --bg-muted: #E7EBE6;
+    --text: #1A211C;
+    --text-muted: #5E6A63;
+    --border: #C5CEC6;
+    --accent: #0F6E56;
+    --accent-hover: #0C5A47;
+    --accent-tint: #DCEBE4;
+    --accent-text: #F4FBF7;
+    --code-bg: #101614;
+    --code-text: #E6EDE8;
+    --shadow: 0 1px 2px rgba(16, 22, 20, 0.06), 0 12px 28px -8px rgba(16, 22, 20, 0.16);
+    --link-text: #0C5A47;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #1e2126;
-      --bg-elevated: #26292f;
-      --bg-muted: #22252b;
-      --text: #e6e8eb;
-      --text-muted: #9aa3b0;
-      --border: #34383f;
-      --accent: #3d7bf5;
-      --accent-hover: #5a90f7;
-      --accent-tint: #1f2b40;
-      --accent-text: #ffffff;
-      --code-bg: #17191d;
-      --code-text: #e6e8eb;
+      --bg: #101614;
+      --bg-elevated: #181E1B;
+      --bg-muted: #0C110F;
+      --text: #E6EDE8;
+      --text-muted: #8A968E;
+      --border: #2A332E;
+      --accent: #3DAB86;
+      --accent-hover: #56C49C;
+      --accent-tint: #16352C;
+      --accent-text: #06241B;
+      --code-bg: #0A0F0D;
+      --code-text: #E6EDE8;
       --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 32px -8px rgba(0, 0, 0, 0.45);
-      --link-text: #6c9dfb;
+      --link-text: #56C49C;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #1e2126; --bg-elevated: #26292f; --bg-muted: #22252b; --text: #e6e8eb;
-    --text-muted: #9aa3b0; --border: #34383f; --accent: #3d7bf5; --accent-hover: #5a90f7;
-    --accent-tint: #1f2b40; --accent-text: #ffffff; --code-bg: #17191d; --code-text: #e6e8eb;
+    --bg: #101614; --bg-elevated: #181E1B; --bg-muted: #0C110F; --text: #E6EDE8;
+    --text-muted: #8A968E; --border: #2A332E; --accent: #3DAB86; --accent-hover: #56C49C;
+    --accent-tint: #16352C; --accent-text: #06241B; --code-bg: #0A0F0D; --code-text: #E6EDE8;
     --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 16px 32px -8px rgba(0,0,0,0.45);
-    --link-text: #6c9dfb;
+    --link-text: #56C49C;
   }
   :root[data-theme="light"] {
-    --bg: #f5f6f8; --bg-elevated: #ffffff; --bg-muted: #eceff3; --text: #1d1f21;
-    --text-muted: #5b6472; --border: #dcdfe4; --accent: #2f6fed; --accent-hover: #4a82f0;
-    --accent-tint: #e9f0ff; --accent-text: #ffffff; --code-bg: #1e2126; --code-text: #e6e8eb;
-    --shadow: 0 1px 2px rgba(20,24,32,0.06), 0 12px 28px -8px rgba(20,24,32,0.16);
-    --link-text: #1f4fc9;
+    --bg: #F1F3F0; --bg-elevated: #FBFCFB; --bg-muted: #E7EBE6; --text: #1A211C;
+    --text-muted: #5E6A63; --border: #C5CEC6; --accent: #0F6E56; --accent-hover: #0C5A47;
+    --accent-tint: #DCEBE4; --accent-text: #F4FBF7; --code-bg: #101614; --code-text: #E6EDE8;
+    --shadow: 0 1px 2px rgba(16,22,20,0.06), 0 12px 28px -8px rgba(16,22,20,0.16);
+    --link-text: #0C5A47;
   }
 
   * { box-sizing: border-box; }
@@ -60,7 +60,7 @@
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Inter", Roboto, sans-serif;
+    font-family: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Ubuntu", "Noto Sans", sans-serif;
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
   }

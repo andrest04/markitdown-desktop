@@ -27,21 +27,24 @@ manual "export" step required.
 
 ## Features
 
-- Drag-and-drop of files/folders (recursive) onto a big, centered drop
-  zone, click-to-browse on that same zone, "Add files" / "Add folder"
-  buttons, and a URL field (webpage or YouTube link) — any of these starts
-  conversion immediately, no separate "Convert" click needed.
+- Drag-and-drop of files/folders (recursive) onto the window, explicit
+  Browse / Add folder buttons, and a URL field (webpage or YouTube link)
+  — any of these starts conversion immediately, no separate "Convert"
+  click needed. You can also drop files onto the queue or preview once
+  items exist.
 - **Auto-save to Downloads**: as soon as an item finishes converting, the
   resulting `.md` file is written straight to `Path.home() / "Downloads"`
   (resolved generically, so it works on any account) using the original
   file's name. If a same-named file already exists there, a numeric suffix
   is appended (`document (1).md`, `document (2).md`, ...) so nothing gets
-  overwritten. The queue row shows "Done — Saved to Downloads"; double-click
-  a done row to open its containing folder.
-- Queue table with per-item status (Pending / Converting / Done / Error),
-  multi-select, remove, and clear-all. The drop zone is dominant while the
-  queue is empty and shrinks to a slim bar once items are added, so the
-  table takes over. A subtle hover glow animation highlights the drop zone.
+  overwritten. The queue row shows "Saved to Downloads"; a banner offers
+  "Show in folder", and double-clicking a done row opens the containing
+  folder.
+- Queue as an activity list with per-item status (Pending / Converting /
+  Saved / Error), multi-select, remove, and clear. The drop canvas is the
+  whole window while empty and shrinks to a slim bar once items exist, so
+  the list and preview can take over. Retry is in the row context menu
+  and Edit menu, out of the primary path.
 - Runs on a background `QThreadPool` so the UI never freezes; per-item
   errors are caught and shown without stopping the batch. A progress bar
   only appears while a batch is actively converting, and disappears when
@@ -56,12 +59,13 @@ manual "export" step required.
   extension/mimetype/charset `StreamInfo` hints) live in a secondary
   **Edit > Advanced Settings...** dialog, out of the way of the main
   drop-and-done flow.
-- Light/dark QSS themes, with "follow system" or manual toggle, persisted
-  via `QSettings` (window geometry, last export folder, theme choice).
+- Light/dark Inkbench themes (Fusion + QSS), with "follow system" or
+  manual toggle, persisted via `QSettings` (window geometry, last export
+  folder, theme choice).
 - **English/Spanish (neutral) UI** via a lightweight, dependency-free
   translation layer (`app/i18n.py` — no Qt Linguist `.ts`/`.qm` build step).
   Defaults to your system locale (Spanish for `es_*`, English otherwise)
-  and can be switched anytime with the language dropdown next to the menu
+  and can be switched anytime with the EN / ES control next to the menu
   bar; the choice is remembered via `QSettings` and switching updates the
   whole UI, including already-queued rows, immediately — no restart needed.
 

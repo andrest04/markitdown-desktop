@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   adds a Start Menu shortcut, an optional desktop shortcut, and a proper
   uninstaller.
 
+### Changed
+
+- Rebuilt the desktop UI around the drop-and-done path: full-window empty
+  canvas, activity-list queue, preview that appears only after items exist,
+  save-to-Downloads banner, and retry moved to context / Edit menus.
+- Replaced the generic blue QSS with the Inkbench token system (cool
+  uncoated-stock paper, pine accent, Fusion palette) and aligned the
+  landing page with the same palette.
+
 ## [1.3.0] - 2026-08-13
 
 ### Added
