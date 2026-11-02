@@ -192,6 +192,12 @@ class StatusNeverByColorAloneTests(unittest.TestCase):
         glyphs = {state: status_style(state).glyph for state in DisplayState}
         self.assertEqual(len(set(glyphs.values())), len(DisplayState))
 
+    def test_only_links_show_a_type_because_a_file_name_has_one(self):
+        delegate = QueueItemDelegate()
+        self.assertEqual(delegate._type_label(make_item("a.txt")), "")
+        link = QueueItem.from_url("https://www.youtube.com/watch?v=x")
+        self.assertEqual(delegate._type_label(link), "YouTube")
+
     def test_status_colors_are_readable_on_the_highlighter_when_selected(self):
         delegate = QueueItemDelegate()
         tokens = tokens_for("light")

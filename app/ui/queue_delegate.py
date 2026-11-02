@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
 )
 
-from app.core.queue_model import DisplayState, QueueTableModel
+from app.core.queue_model import DisplayState, QueueTableModel, SourceKind
 from app.i18n import tr
 from app.ui.theme import tokens_for
 
@@ -181,7 +181,7 @@ class QueueItemDelegate(QStyledItemDelegate):
         text_left = glyph_rect.right() + 1 + _GLYPH_GAP
         text_right = rect.right() - _PADDING
 
-        type_label = tr(item.detected_type) if item.detected_type else ""
+        type_label = self._type_label(item)
         name_right = text_right
         if type_label:
             type_width = meta_metrics.horizontalAdvance(type_label)
@@ -220,6 +220,12 @@ class QueueItemDelegate(QStyledItemDelegate):
             painter.drawRect(rect.adjusted(1, 1, -1, -1))
 
         painter.restore()
+
+    def _type_label(self, item) -> str:
+        """Only links get a type: a file name already ends in its own."""
+        if item.kind != SourceKind.URL or not item.detected_type:
+            return ""
+        return tr(item.detected_type)
 
     def _status_parts(self, item, t, selected: bool = False) -> tuple[str, str]:
         state = item.display_state
