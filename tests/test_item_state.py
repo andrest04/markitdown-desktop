@@ -20,52 +20,52 @@ MATRIX = [
     {
         "item": (ItemStatus.PENDING, "", ""),
         "text": "status.pending", "tooltip": None,
-        "color": "muted", "pill": ("status.pill.pending", "muted", "sunken"),
+        "color": "muted", "pill": ("status.pill.pending", "muted", "wash"),
         "header": "preview.pending", "kind": "pending", "open": False, "retry": False,
     },
     {
         "item": (ItemStatus.CONVERTING, "", ""),
         "text": "status.converting", "tooltip": None,
-        "color": "mark", "pill": ("status.pill.converting", "mark", "mark_tint"),
+        "color": "ink", "pill": ("status.pill.converting", "ink", "wash"),
         "header": "preview.converting", "kind": "converting", "open": False, "retry": False,
     },
     {
         # A retry of an item that was saved earlier.
         "item": (ItemStatus.CONVERTING, SAVED_PATH, ""),
         "text": "status.converting", "tooltip": None,
-        "color": "mark", "pill": ("status.pill.converting", "mark", "mark_tint"),
+        "color": "ink", "pill": ("status.pill.converting", "ink", "wash"),
         "header": "preview.converting", "kind": "converting", "open": False, "retry": False,
     },
     {
         "item": (ItemStatus.DONE, SAVED_PATH, ""),
         "text": "status.done_saved", "tooltip": tr("tooltip.saved_to", path=SAVED_PATH),
-        "color": "mark", "pill": ("status.pill.saved", "mark", "mark_tint"),
+        "color": "ink", "pill": ("status.pill.saved", "ink", "wash"),
         "header": "status.done_saved", "kind": "saved", "open": True, "retry": False,
     },
     {
         "item": (ItemStatus.DONE, "", "disk full"),
         "text": "status.done_save_failed", "tooltip": tr("tooltip.save_failed", error="disk full"),
-        "color": "danger", "pill": ("status.pill.save_failed", "danger", "danger_tint"),
+        "color": "danger", "pill": ("status.pill.save_failed", "danger", "wash"),
         "header": "status.done_save_failed", "kind": "error", "open": False, "retry": True,
     },
     {
         # Transient: converted, auto-save has not reported yet.
         "item": (ItemStatus.DONE, "", ""),
         "text": "status.done", "tooltip": None,
-        "color": "muted", "pill": ("status.pill.pending", "muted", "sunken"),
+        "color": "muted", "pill": ("status.pill.pending", "muted", "wash"),
         "header": "status.done", "kind": "pending", "open": False, "retry": False,
     },
     {
         "item": (ItemStatus.ERROR, "", ""),
         "text": "status.error", "tooltip": "boom",
-        "color": "danger", "pill": ("status.pill.error", "danger", "danger_tint"),
+        "color": "danger", "pill": ("status.pill.error", "danger", "wash"),
         "header": None, "kind": "error", "open": False, "retry": True,
     },
     {
         # A failed retry: the earlier file still exists, but the item shows failed.
         "item": (ItemStatus.ERROR, SAVED_PATH, ""),
         "text": "status.error", "tooltip": "boom",
-        "color": "danger", "pill": ("status.pill.error", "danger", "danger_tint"),
+        "color": "danger", "pill": ("status.pill.error", "danger", "wash"),
         "header": None, "kind": "error", "open": False, "retry": True,
     },
 ]

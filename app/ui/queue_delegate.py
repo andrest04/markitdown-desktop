@@ -20,12 +20,12 @@ RADIUS = 10
 # Per state: theme token for the status line, then the pill's translation key
 # and its foreground/background theme tokens.
 _STATE_STYLES = {
-    DisplayState.PENDING: ("muted", "status.pill.pending", "muted", "sunken"),
-    DisplayState.CONVERTING: ("mark", "status.pill.converting", "mark", "mark_tint"),
-    DisplayState.DONE: ("muted", "status.pill.pending", "muted", "sunken"),
-    DisplayState.SAVED: ("mark", "status.pill.saved", "mark", "mark_tint"),
-    DisplayState.SAVE_FAILED: ("danger", "status.pill.save_failed", "danger", "danger_tint"),
-    DisplayState.ERROR: ("danger", "status.pill.error", "danger", "danger_tint"),
+    DisplayState.PENDING: ("muted", "status.pill.pending", "muted", "wash"),
+    DisplayState.CONVERTING: ("ink", "status.pill.converting", "ink", "wash"),
+    DisplayState.DONE: ("muted", "status.pill.pending", "muted", "wash"),
+    DisplayState.SAVED: ("ink", "status.pill.saved", "ink", "wash"),
+    DisplayState.SAVE_FAILED: ("danger", "status.pill.save_failed", "danger", "wash"),
+    DisplayState.ERROR: ("danger", "status.pill.error", "danger", "wash"),
 }
 
 
@@ -59,8 +59,8 @@ class QueueItemDelegate(QStyledItemDelegate):
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
         hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
 
-        fill = QColor(t.mark_tint if selected else (t.sunken if hovered else t.elevated))
-        painter.setPen(QPen(QColor(t.mark if selected else t.rule), 1))
+        fill = QColor(t.mark if selected else (t.wash if hovered else t.paper))
+        painter.setPen(QPen(QColor(t.edge if selected else t.rule), 1))
         painter.setBrush(fill)
         painter.drawRoundedRect(rect, RADIUS, RADIUS)
 

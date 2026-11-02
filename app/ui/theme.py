@@ -1,8 +1,10 @@
-"""Inkbench visual system — light/dark tokens compiled to QSS.
+"""Ink on paper, and one highlighter: light/dark tokens compiled to QSS.
 
-The app is a conversion bench for documents, not a SaaS dashboard.
-Paper is uncoated stock (cool green-gray), ink is forest-black, and the
-one loud color is pine — a press mark, not a generic blue button.
+Every neutral is a dilution of the blue-black ink. `mark` is the only color,
+and it sits on exactly what the person is working on: the instruction on an
+empty window, the selected row, selected text, the window while a file is held
+over it, and a focused primary action. Saved has no green and failure is the
+only other hue. See `tests/test_theme_contrast.py` for the checked pairings.
 """
 from __future__ import annotations
 
@@ -12,71 +14,82 @@ from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import QApplication
 
 FONT_UI = (
-    '"Segoe UI Variable Text", "Segoe UI", ".AppleSystemUIFont", '
-    '"SF Pro Text", "Ubuntu", "Cantarell", "Noto Sans", sans-serif'
+    '"Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", '
+    '".AppleSystemUIFont", "SF Pro Text", "Ubuntu", "Cantarell", '
+    '"Noto Sans", "DejaVu Sans", sans-serif'
 )
-FONT_MONO = (
-    '"Cascadia Code", "Cascadia Mono", "SF Mono", "Menlo", '
-    '"Ubuntu Mono", "Consolas", monospace'
+# Raw Markdown only: there the monospace is the content, not a decoration.
+MONO_FAMILIES = (
+    "Cascadia Mono",
+    "Cascadia Code",
+    "Consolas",
+    "SF Mono",
+    "Menlo",
+    "Ubuntu Mono",
+    "DejaVu Sans Mono",
 )
+FONT_MONO = ", ".join(f'"{family}"' for family in MONO_FAMILIES) + ", monospace"
+
+# Rendered Markdown stops growing at a comfortable reading measure.
+READING_WIDTH = 720
 
 
 @dataclass(frozen=True)
 class Tokens:
-    paper: str
-    elevated: str
-    sunken: str
-    ink: str
-    muted: str
-    faint: str
-    rule: str
-    mark: str
-    mark_hover: str
-    mark_pressed: str
-    mark_tint: str
+    paper: str  # the document sheet
+    desk: str  # list pane, menu bar, status bar
+    wash: str  # quiet control fill, row hover
+    wash_strong: str  # quiet control hover and pressed
+    rule: str  # structural hairlines only
+    edge: str  # control boundaries, 3:1 against paper and desk
+    ink: str  # text, primary action fill, focus ring
+    muted: str  # secondary text
+    primary_fg: str
+    primary_hover: str
+    primary_pressed: str
+    mark: str  # the highlighter
     on_mark: str
-    danger: str
-    danger_hover: str
-    danger_tint: str
-    shadow: str
+    on_mark_muted: str
+    on_mark_danger: str
+    danger: str  # failure only
 
 
 LIGHT = Tokens(
-    paper="#F1F3F0",
-    elevated="#FBFCFB",
-    sunken="#E7EBE6",
-    ink="#1A211C",
-    muted="#5E6A63",
-    faint="#8A948C",
-    rule="#C5CEC6",
-    mark="#0F6E56",
-    mark_hover="#0C5A47",
-    mark_pressed="#094536",
-    mark_tint="#DCEBE4",
-    on_mark="#F4FBF7",
-    danger="#B42318",
-    danger_hover="#912018",
-    danger_tint="#F8E6E4",
-    shadow="#0F6E56",
+    paper="#FFFFFF",
+    desk="#EEF0F4",
+    wash="#E2E5EC",
+    wash_strong="#D3D8E2",
+    rule="#D5D9E2",
+    edge="#7A8498",
+    ink="#14213D",
+    muted="#4A5568",
+    primary_fg="#FFFFFF",
+    primary_hover="#24345A",
+    primary_pressed="#0E1830",
+    mark="#FFE84D",
+    on_mark="#14213D",
+    on_mark_muted="#3F4A5E",
+    on_mark_danger="#A1170F",
+    danger="#B3261E",
 )
 
 DARK = Tokens(
-    paper="#101614",
-    elevated="#181E1B",
-    sunken="#0C110F",
-    ink="#E6EDE8",
-    muted="#8A968E",
-    faint="#6B766F",
-    rule="#2A332E",
-    mark="#3DAB86",
-    mark_hover="#56C49C",
-    mark_pressed="#2E8A6A",
-    mark_tint="#16352C",
-    on_mark="#06241B",
-    danger="#F97066",
-    danger_hover="#FDA29B",
-    danger_tint="#3B1C1A",
-    shadow="#3DAB86",
+    paper="#232936",
+    desk="#1A1F2B",
+    wash="#2E3544",
+    wash_strong="#3A4254",
+    rule="#343B4B",
+    edge="#78839A",
+    ink="#EEF0F5",
+    muted="#AEB6C6",
+    primary_fg="#1A1F2B",
+    primary_hover="#FFFFFF",
+    primary_pressed="#CBD0DB",
+    mark="#F5DC4A",
+    on_mark="#1A1F2B",
+    on_mark_muted="#40485A",
+    on_mark_danger="#A1170F",
+    danger="#FF9C8F",
 )
 
 
@@ -89,242 +102,215 @@ def apply_fusion_palette(app: QApplication, theme_name: str) -> None:
     pickers) does not snap back to the native OS look."""
     t = tokens_for(theme_name)
     app.setStyle("Fusion")
-    palette = QPalette()
-    paper = QColor(t.paper)
+    # This constructor derives the bevel roles Fusion draws checkboxes with.
+    palette = QPalette(QColor(t.wash), QColor(t.paper))
     ink = QColor(t.ink)
-    elevated = QColor(t.elevated)
     muted = QColor(t.muted)
-    mark = QColor(t.mark)
-    palette.setColor(QPalette.ColorRole.Window, paper)
+    palette.setColor(QPalette.ColorRole.Window, QColor(t.desk))
     palette.setColor(QPalette.ColorRole.WindowText, ink)
-    palette.setColor(QPalette.ColorRole.Base, elevated)
-    palette.setColor(QPalette.ColorRole.AlternateBase, QColor(t.sunken))
+    palette.setColor(QPalette.ColorRole.Base, QColor(t.paper))
+    palette.setColor(QPalette.ColorRole.AlternateBase, QColor(t.desk))
     palette.setColor(QPalette.ColorRole.Text, ink)
-    palette.setColor(QPalette.ColorRole.Button, elevated)
     palette.setColor(QPalette.ColorRole.ButtonText, ink)
-    palette.setColor(QPalette.ColorRole.Highlight, mark)
+    palette.setColor(QPalette.ColorRole.Highlight, QColor(t.mark))
     palette.setColor(QPalette.ColorRole.HighlightedText, QColor(t.on_mark))
     palette.setColor(QPalette.ColorRole.PlaceholderText, muted)
-    palette.setColor(QPalette.ColorRole.Link, mark)
-    palette.setColor(QPalette.ColorRole.ToolTipBase, elevated)
+    palette.setColor(QPalette.ColorRole.Link, ink)
+    palette.setColor(QPalette.ColorRole.LinkVisited, ink)
+    palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(t.paper))
     palette.setColor(QPalette.ColorRole.ToolTipText, ink)
+    for role in (QPalette.ColorRole.Text, QPalette.ColorRole.WindowText, QPalette.ColorRole.ButtonText):
+        palette.setColor(QPalette.ColorGroup.Disabled, role, muted)
     app.setPalette(palette)
     font = app.font()
     font.setStyleHint(QFont.StyleHint.SansSerif)
-    font.setPointSize(10)
     app.setFont(font)
 
 
 def _qss(t: Tokens) -> str:
     return f"""
-QMainWindow, QDialog {{
-    background-color: {t.paper};
+QWidget {{
     color: {t.ink};
     font-family: {FONT_UI};
     font-size: 13px;
 }}
-QWidget {{
-    color: {t.ink};
-    font-family: {FONT_UI};
+QMainWindow, QDialog {{
+    background-color: {t.desk};
 }}
+
 QMenuBar {{
-    background-color: {t.paper};
-    color: {t.ink};
+    background-color: {t.desk};
     border-bottom: 1px solid {t.rule};
-    padding: 2px 8px 0 8px;
-    spacing: 4px;
+    padding: 1px 4px;
 }}
 QMenuBar::item {{
     background: transparent;
-    padding: 6px 10px;
-    border-radius: 6px;
+    padding: 5px 9px;
 }}
 QMenuBar::item:selected {{
-    background-color: {t.mark_tint};
+    background-color: {t.wash};
 }}
 QMenu {{
-    background-color: {t.elevated};
-    color: {t.ink};
-    border: 1px solid {t.rule};
-    border-radius: 8px;
-    padding: 6px;
+    background-color: {t.paper};
+    border: 1px solid {t.edge};
+    padding: 4px 0;
 }}
 QMenu::item {{
-    padding: 7px 18px 7px 12px;
-    border-radius: 6px;
+    padding: 6px 28px 6px 16px;
 }}
 QMenu::item:selected {{
-    background-color: {t.mark_tint};
-    color: {t.ink};
+    background-color: {t.wash};
+}}
+QMenu::item:disabled {{
+    color: {t.muted};
 }}
 QMenu::separator {{
     height: 1px;
     background: {t.rule};
-    margin: 5px 8px;
+    margin: 4px 0;
 }}
 
 QPushButton {{
-    background-color: {t.mark};
-    color: {t.on_mark};
-    border: none;
-    border-radius: 8px;
-    padding: 8px 16px;
-    font-weight: 600;
-}}
-QPushButton:hover {{
-    background-color: {t.mark_hover};
-}}
-QPushButton:pressed {{
-    background-color: {t.mark_pressed};
-}}
-QPushButton:disabled {{
-    background-color: {t.sunken};
-    color: {t.faint};
-}}
-QPushButton:focus {{
+    background-color: {t.wash};
+    border: 2px solid transparent;
+    border-radius: 4px;
+    padding: 4px 12px;
     outline: none;
 }}
-QPushButton:focus-visible {{
-    border: 2px solid {t.mark};
+QPushButton:hover, QPushButton:pressed {{
+    background-color: {t.wash_strong};
+}}
+QPushButton:focus {{
+    border-color: {t.ink};
+}}
+QPushButton:disabled {{
+    background-color: transparent;
+    color: {t.muted};
+}}
+QPushButton::menu-indicator {{
+    image: none;
+    width: 0;
 }}
 
-QPushButton#secondary, QPushButton#ghost {{
-    background-color: transparent;
-    color: {t.ink};
-    border: 1px solid {t.rule};
-    font-weight: 500;
-}}
-QPushButton#secondary:hover, QPushButton#ghost:hover {{
-    background-color: {t.sunken};
-    border-color: {t.muted};
-}}
-QPushButton#secondary:pressed, QPushButton#ghost:pressed {{
-    background-color: {t.mark_tint};
-}}
-QPushButton#secondary:disabled, QPushButton#ghost:disabled {{
-    background-color: transparent;
-    color: {t.faint};
-    border-color: {t.rule};
-}}
-
-QPushButton#danger {{
-    background-color: transparent;
-    color: {t.danger};
-    border: 1px solid {t.rule};
-    font-weight: 500;
-}}
-QPushButton#danger:hover {{
-    background-color: {t.danger_tint};
-    border-color: {t.danger};
-}}
-
-QPushButton#link {{
-    background-color: transparent;
-    color: {t.mark};
-    border: none;
-    padding: 4px 8px;
+QPushButton[tier="primary"], QDialogButtonBox QPushButton:default {{
+    background-color: {t.ink};
+    color: {t.primary_fg};
     font-weight: 600;
 }}
-QPushButton#link:hover {{
-    background-color: {t.mark_tint};
+QPushButton[tier="primary"]:hover, QDialogButtonBox QPushButton:default:hover {{
+    background-color: {t.primary_hover};
+}}
+QPushButton[tier="primary"]:pressed, QDialogButtonBox QPushButton:default:pressed {{
+    background-color: {t.primary_pressed};
+}}
+QPushButton[tier="primary"]:focus, QDialogButtonBox QPushButton:default:focus {{
+    background-color: {t.mark};
+    color: {t.on_mark};
+    border-color: {t.on_mark};
+}}
+
+QPushButton[tier="ghost"] {{
+    background-color: transparent;
+    padding: 4px 8px;
+}}
+QPushButton[tier="ghost"]:hover, QPushButton[tier="ghost"]:pressed {{
+    background-color: {t.wash};
 }}
 
 QPushButton#lang {{
     background-color: transparent;
     color: {t.muted};
-    border: none;
-    border-radius: 6px;
-    padding: 4px 9px;
-    font-weight: 600;
-    min-width: 36px;
-}}
-QPushButton#lang:checked {{
-    background-color: {t.mark_tint};
-    color: {t.mark};
+    border-radius: 0;
+    padding: 2px 6px;
 }}
 QPushButton#lang:hover {{
     color: {t.ink};
 }}
-
-QLineEdit, QPlainTextEdit, QTextEdit, QTextBrowser {{
-    background-color: {t.elevated};
+QPushButton#lang:checked {{
     color: {t.ink};
-    border: 1px solid {t.rule};
-    border-radius: 8px;
-    padding: 8px 12px;
-    selection-background-color: {t.mark_tint};
-    selection-color: {t.ink};
+    font-weight: 600;
+    border-bottom-color: {t.ink};
 }}
-QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus {{
-    border: 1px solid {t.mark};
+QPushButton#lang:focus {{
+    border-color: {t.ink};
 }}
-QTextBrowser {{
-    padding: 16px 18px;
+
+QLineEdit {{
+    background-color: {t.paper};
+    border: 1px solid {t.edge};
+    border-radius: 4px;
+    padding: 5px 8px;
+    selection-background-color: {t.mark};
+    selection-color: {t.on_mark};
+}}
+QLineEdit:focus {{
+    border: 2px solid {t.ink};
+    padding: 4px 7px;
+}}
+QLineEdit:disabled {{
+    background-color: {t.desk};
+    color: {t.muted};
+}}
+
+QPlainTextEdit, QTextBrowser {{
+    background-color: {t.paper};
+    border: 2px solid transparent;
+    padding: 14px 22px;
+    selection-background-color: {t.mark};
+    selection-color: {t.on_mark};
+}}
+QPlainTextEdit:focus, QTextBrowser:focus {{
+    border-color: {t.ink};
 }}
 
 QTableView#QueueView {{
-    background-color: transparent;
-    alternate-background-color: transparent;
+    background-color: {t.desk};
     border: none;
-    gridline-color: transparent;
     outline: none;
-    color: {t.ink};
-}}
-QTableView#QueueView::item {{
-    background: transparent;
-    border: none;
-    padding: 0;
-}}
-QTableView#QueueView::item:selected {{
-    background: transparent;
-}}
-QHeaderView::section {{
-    background-color: transparent;
-    border: none;
-    height: 0;
 }}
 
 QTabWidget::pane {{
-    border: 1px solid {t.rule};
-    border-radius: 10px;
-    background-color: {t.elevated};
+    border: none;
+    border-top: 1px solid {t.rule};
     top: -1px;
+}}
+QTabWidget::tab-bar {{
+    left: 18px;
+}}
+QTabBar {{
+    outline: none;
 }}
 QTabBar::tab {{
     background: transparent;
     color: {t.muted};
-    padding: 8px 16px;
-    margin-right: 2px;
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
-    font-weight: 500;
+    padding: 6px 6px;
+    margin-right: 10px;
+    border-bottom: 2px solid transparent;
+}}
+QTabBar::tab:hover {{
+    color: {t.ink};
 }}
 QTabBar::tab:selected {{
-    background: {t.elevated};
     color: {t.ink};
     font-weight: 600;
-    border: 1px solid {t.rule};
-    border-bottom: 1px solid {t.elevated};
+    border-bottom: 2px solid {t.ink};
 }}
-QTabBar::tab:hover:!selected {{
-    color: {t.ink};
+QTabBar::tab:focus {{
+    background: {t.wash};
 }}
 
 QProgressBar {{
     border: none;
-    background-color: {t.sunken};
-    border-radius: 2px;
-    max-height: 3px;
-    min-height: 3px;
-    text-align: center;
+    background-color: {t.wash};
+    max-height: 2px;
+    min-height: 2px;
 }}
 QProgressBar::chunk {{
-    background-color: {t.mark};
-    border-radius: 2px;
+    background-color: {t.ink};
 }}
 
 QStatusBar {{
-    background-color: {t.paper};
+    background-color: {t.desk};
     color: {t.muted};
     border-top: 1px solid {t.rule};
     font-size: 12px;
@@ -336,140 +322,124 @@ QStatusBar::item {{
 QScrollBar:vertical {{
     background: transparent;
     width: 10px;
-    margin: 4px 2px;
+    margin: 0 1px;
 }}
 QScrollBar::handle:vertical {{
-    background: {t.rule};
-    border-radius: 4px;
+    background: {t.edge};
     min-height: 32px;
 }}
 QScrollBar::handle:vertical:hover {{
     background: {t.muted};
 }}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
     height: 0;
+    background: transparent;
 }}
 QScrollBar:horizontal {{
     background: transparent;
     height: 10px;
-    margin: 2px 4px;
+    margin: 1px 0;
 }}
 QScrollBar::handle:horizontal {{
-    background: {t.rule};
-    border-radius: 4px;
+    background: {t.edge};
     min-width: 32px;
 }}
-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+QScrollBar::handle:horizontal:hover {{
+    background: {t.muted};
+}}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal,
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
     width: 0;
+    background: transparent;
 }}
 
 QCheckBox {{
+    border: 2px solid transparent;
+    padding: 1px 2px;
     spacing: 8px;
 }}
-QCheckBox::indicator {{
-    width: 16px;
-    height: 16px;
-    border: 1px solid {t.rule};
-    border-radius: 4px;
-    background: {t.elevated};
-}}
-QCheckBox::indicator:checked {{
-    background: {t.mark};
-    border-color: {t.mark};
+QCheckBox:focus {{
+    border-color: {t.ink};
+    outline: none;
 }}
 
 QSplitter::handle {{
     background: {t.rule};
-    width: 1px;
-    margin: 8px 0;
 }}
 QSplitter::handle:hover {{
-    background: {t.mark};
+    background: {t.edge};
 }}
 
 QToolTip {{
-    background-color: {t.elevated};
+    background-color: {t.paper};
     color: {t.ink};
-    border: 1px solid {t.rule};
-    border-radius: 6px;
-    padding: 6px 8px;
+    border: 1px solid {t.edge};
+    padding: 4px 6px;
 }}
 
-#DropZone {{
-    background-color: transparent;
-    border: 1px solid transparent;
-    border-radius: 14px;
+#QueuePane, #LanguageSwitch {{
+    background: {t.desk};
+}}
+#QueuePane[empty="true"], #DropZone[prominent="true"] {{
+    background: {t.paper};
+}}
+#PreviewPane {{
+    background: {t.paper};
 }}
 #DropZone[prominent="false"] {{
-    background-color: {t.elevated};
-    border: 1px solid {t.rule};
+    background: {t.desk};
 }}
-#DropZone[dragActive="true"] {{
-    border: 2px solid {t.mark};
-    background-color: {t.mark_tint};
-}}
+
 #DropZoneTitle {{
-    color: {t.ink};
+    background: {t.mark};
+    color: {t.on_mark};
+    font-size: 30px;
+    font-weight: 600;
+    padding: 4px 12px;
+}}
+#DropZoneHint {{
+    background: transparent;
+    font-size: 15px;
+}}
+#DropZoneLabel {{
     background: transparent;
     font-weight: 600;
 }}
-#DropZoneHint, #DropZoneSaveNote, #SupportedTypesLabel {{
-    color: {t.muted};
+#DropZoneFormats {{
     background: transparent;
-}}
-#FormatChip {{
-    background-color: {t.sunken};
     color: {t.muted};
-    border: none;
-    border-radius: 999px;
-    padding: 4px 10px;
-    font-size: 11px;
+}}
+#DragOverlay {{
+    background: {t.mark};
+    color: {t.on_mark};
+    font-size: 30px;
     font-weight: 600;
 }}
 
-#QueuePane, #PreviewPane {{
-    background: transparent;
-}}
-#PreviewEmptyTitle {{
-    color: {t.ink};
-    background: transparent;
-    font-size: 16px;
-    font-weight: 600;
-}}
-#PreviewEmptyHint {{
-    color: {t.muted};
-    background: transparent;
-}}
-
-#PreviewHeader {{
-    background-color: {t.elevated};
-    border: 1px solid {t.rule};
-    border-radius: 10px;
-}}
 #PreviewHeaderName {{
     background: transparent;
-    color: {t.ink};
+    font-size: 18px;
     font-weight: 600;
 }}
 #PreviewHeaderStatus {{
     background: transparent;
     color: {t.muted};
 }}
-#PreviewHeaderStatus[kind="saved"] {{
-    color: {t.mark};
-    font-weight: 600;
-}}
 #PreviewHeaderStatus[kind="error"] {{
     color: {t.danger};
     font-weight: 600;
 }}
-#PreviewHeaderStatus[kind="converting"] {{
-    color: {t.mark};
+#PreviewHeaderStatus[kind="saved"], #PreviewHeaderStatus[kind="converting"] {{
+    color: {t.ink};
+}}
+#PreviewEmptyTitle {{
+    background: transparent;
     font-weight: 600;
 }}
-
-#LanguageSwitch {{
+#PreviewEmptyHint {{
     background: transparent;
+    color: {t.muted};
 }}
 """
 
@@ -477,3 +447,14 @@ QToolTip {{
 def stylesheet_for(theme_name: str) -> str:
     """Return the QSS string for 'light' or 'dark'; defaults to light."""
     return _qss(tokens_for(theme_name))
+
+
+def document_css_for(theme_name: str) -> str:
+    """Default stylesheet for rendered Markdown in the preview."""
+    t = tokens_for(theme_name)
+    return f"""
+a {{ color: {t.ink}; text-decoration: underline; }}
+h1, h2, h3, h4 {{ color: {t.ink}; font-weight: 600; }}
+code, pre {{ font-family: {FONT_MONO}; background-color: {t.desk}; }}
+th {{ font-weight: 600; }}
+"""
