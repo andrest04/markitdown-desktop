@@ -149,9 +149,13 @@ def supported_name_filter(label: str) -> str:
     return f"{label} ({patterns})"
 
 
-@dataclass
+@dataclass(frozen=True)
 class ConversionOptions:
-    """Options mirrored from the Options panel, mapped to real MarkItDown kwargs."""
+    """Conversion settings, mapped to real MarkItDown kwargs.
+
+    Frozen: workers on other threads hold the same instance, so a settings
+    change replaces it (see `dataclasses.replace`) instead of mutating it.
+    """
 
     enable_plugins: bool = False
     keep_data_uris: bool = False

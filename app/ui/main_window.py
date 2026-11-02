@@ -129,13 +129,7 @@ class MainWindow(QMainWindow):
 
         self._preview_item: QueueItem | None = None
 
-        self.enable_plugins = False
-        self.keep_data_uris = False
-        self.docintel_enabled = False
-        self.docintel_endpoint = ""
-        self.cu_enabled = False
-        self.cu_endpoint = ""
-        self.cu_analyzer_id = ""
+        self.conversion_options = ConversionOptions()
 
         self.model = QueueTableModel(self)
         self.conversion_queue = ConversionQueue(self.model, parent=self)
@@ -617,17 +611,6 @@ class MainWindow(QMainWindow):
         self.rendered_view.clear()
         self._refresh_preview()
 
-    def _current_options(self) -> ConversionOptions:
-        return ConversionOptions(
-            enable_plugins=self.enable_plugins,
-            keep_data_uris=self.keep_data_uris,
-            docintel_enabled=self.docintel_enabled,
-            docintel_endpoint=self.docintel_endpoint,
-            cu_enabled=self.cu_enabled,
-            cu_endpoint=self.cu_endpoint,
-            cu_analyzer_id=self.cu_analyzer_id,
-        )
-
     def action_convert_all(self) -> None:
         rows = list(range(len(self.model.items())))
         self._start_conversion(rows)
@@ -643,7 +626,7 @@ class MainWindow(QMainWindow):
         if not rows:
             return
         items = [self.model.item_at(row) for row in rows]
-        self.conversion_queue.enqueue([item for item in items if item is not None], self._current_options())
+        self.conversion_queue.enqueue([item for item in items if item is not None], self.conversion_options)
 
     def _refresh_preview_if_selected(self, item: QueueItem) -> None:
         row = self.model.row_of(item)
@@ -858,6 +841,8 @@ class MainWindow(QMainWindow):
         AboutDialog(self).exec()
 
     def _show_advanced_settings(self) -> None:
-        dialog = AdvancedSettingsDialog(self, self)
+        target_item = self.model.item_at(self._selected_row())
+        dialog = AdvancedSettingsDialog(self.conversion_options, target_item, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            dialog.apply_to_main_window()
+            self.conversion_options = dialog.selected_options()
+            dialog.apply_item_overrides()
