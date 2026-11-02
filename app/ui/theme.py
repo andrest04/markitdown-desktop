@@ -2,8 +2,9 @@
 
 Every neutral is a dilution of the blue-black ink. `mark` is the only color,
 and it sits on exactly what the person is working on: the instruction on an
-empty window, the selected row, selected text, the window while a file is held
-over it, and a focused primary action. Saved has no green and failure is the
+empty window, the selected file's name, selected text, the window while a file
+is held over it, and a focused primary action. It marks words, like a real
+highlighter, so it never fills a whole row. Saved has no green and failure is the
 only other hue. See `tests/test_theme_contrast.py` for the checked pairings.
 """
 from __future__ import annotations
@@ -32,7 +33,8 @@ READING_WIDTH = 720
 class Tokens:
     paper: str  # the document sheet
     desk: str  # list pane, menu bar, status bar
-    wash: str  # quiet control fill, row hover
+    hover: str  # row hover, one step off the desk
+    wash: str  # quiet control fill, selected row
     wash_strong: str  # quiet control hover and pressed
     rule: str  # structural hairlines only
     edge: str  # control boundaries, 3:1 against paper and desk
@@ -43,18 +45,17 @@ class Tokens:
     primary_pressed: str
     mark: str  # the highlighter
     on_mark: str
-    on_mark_muted: str
-    on_mark_danger: str
     danger: str  # failure only
 
 
 LIGHT = Tokens(
     paper="#FFFFFF",
     desk="#EEF0F4",
+    hover="#E7E9EF",
     wash="#E2E5EC",
     wash_strong="#D3D8E2",
     rule="#D5D9E2",
-    edge="#7A8498",
+    edge="#758095",
     ink="#14213D",
     muted="#4A5568",
     primary_fg="#FFFFFF",
@@ -62,14 +63,13 @@ LIGHT = Tokens(
     primary_pressed="#0E1830",
     mark="#FFE84D",
     on_mark="#14213D",
-    on_mark_muted="#3F4A5E",
-    on_mark_danger="#A1170F",
     danger="#B3261E",
 )
 
 DARK = Tokens(
     paper="#232936",
     desk="#1A1F2B",
+    hover="#242A37",
     wash="#2E3544",
     wash_strong="#3A4254",
     rule="#343B4B",
@@ -81,8 +81,6 @@ DARK = Tokens(
     primary_pressed="#CBD0DB",
     mark="#F5DC4A",
     on_mark="#1A1F2B",
-    on_mark_muted="#40485A",
-    on_mark_danger="#A1170F",
     danger="#FF9C8F",
 )
 
@@ -403,6 +401,29 @@ QToolTip {{
 }}
 #PreviewPane {{
     background: {t.paper};
+}}
+#BrandName {{
+    background: transparent;
+    font-size: 14px;
+    font-weight: 600;
+}}
+#SummaryHeadline {{
+    background: transparent;
+    font-weight: 600;
+}}
+#SummaryHeadline[attention="true"] {{
+    color: {t.danger};
+}}
+#SummaryDetail {{
+    background: transparent;
+    color: {t.muted};
+    font-size: 12px;
+}}
+#SavingTo {{
+    background: transparent;
+    color: {t.muted};
+    font-size: 12px;
+    padding-left: 12px;
 }}
 #DropZone[prominent="false"] {{
     background: {t.desk};

@@ -144,6 +144,25 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "status.saved_copy_to": "Saved a copy to {path}",
         "status.exported": "Exported {count} file(s) to {folder}",
         "status.copied_raw": "Markdown copied",
+        "status.failed_reason": "Failed: {reason}",
+        "status.not_saved_reason": "Not saved: {reason}",
+        "statusbar.saving_to": "Saving to {path}",
+
+        # Queue summary: what needs attention first, then what is ready
+        "summary.failed.one": "1 failed",
+        "summary.failed.other": "{count} failed",
+        "summary.not_saved.one": "1 not saved",
+        "summary.not_saved.other": "{count} not saved",
+        "summary.ready.one": "1 ready",
+        "summary.ready.other": "{count} ready",
+        "summary.converting.one": "1 converting",
+        "summary.converting.other": "{count} converting",
+        "summary.waiting.one": "1 waiting",
+        "summary.waiting.other": "{count} waiting",
+        "summary.ready_of": "{ready} of {total} ready",
+        "summary.all_saved.one": "1 saved to Downloads",
+        "summary.all_saved.other": "All {count} saved to Downloads",
+        "button.retry_row": "Retry",
 
         # About dialog
         "about.title": "About MarkItDown Desktop",
@@ -286,6 +305,25 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "status.saved_copy_to": "Copia guardada en {path}",
         "status.exported": "Se exportaron {count} archivo(s) a {folder}",
         "status.copied_raw": "Markdown copiado",
+        "status.failed_reason": "Falló: {reason}",
+        "status.not_saved_reason": "Sin guardar: {reason}",
+        "statusbar.saving_to": "Guardando en {path}",
+
+        # Queue summary: what needs attention first, then what is ready
+        "summary.failed.one": "1 falló",
+        "summary.failed.other": "{count} fallaron",
+        "summary.not_saved.one": "1 sin guardar",
+        "summary.not_saved.other": "{count} sin guardar",
+        "summary.ready.one": "1 listo",
+        "summary.ready.other": "{count} listos",
+        "summary.converting.one": "1 convirtiendo",
+        "summary.converting.other": "{count} convirtiendo",
+        "summary.waiting.one": "1 en espera",
+        "summary.waiting.other": "{count} en espera",
+        "summary.ready_of": "{ready} de {total} listos",
+        "summary.all_saved.one": "1 guardado en Descargas",
+        "summary.all_saved.other": "Los {count} guardados en Descargas",
+        "button.retry_row": "Reintentar",
 
         # About dialog
         "about.title": "Acerca de MarkItDown Desktop",

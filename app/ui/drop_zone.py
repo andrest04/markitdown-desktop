@@ -15,10 +15,31 @@ from PySide6.QtWidgets import (
 from app.i18n import tr
 from app.ui.theme import set_tier
 
-FILLED_HEIGHT = 58
+FILLED_HEIGHT = 46
+# Holds the 30px instruction in its longest language; a wider font widens it.
+EMPTY_COLUMN_WIDTH = 640
 _URL_ROW_WIDTH = 560
-_EMPTY_MARGINS = (56, 0, 56, 0)
-_FILLED_MARGINS = (12, 12, 12, 12)
+EMPTY_GUTTER = 56
+_EMPTY_MARGINS = (EMPTY_GUTTER, 0, EMPTY_GUTTER, 0)
+_FILLED_MARGINS = (14, 8, 14, 8)
+_NO_LIMIT = 16777215
+
+
+def empty_column_left(width: int, column_width: int = EMPTY_COLUMN_WIDTH) -> int:
+    """Where the empty window's column starts, centered once there is room."""
+    return max(EMPTY_GUTTER, (width - column_width) // 2)
+
+
+def center_column(layout: QHBoxLayout, column: QWidget, empty: bool, width: int = EMPTY_COLUMN_WIDTH) -> None:
+    """Center `column` in an empty window, or let it fill a populated pane.
+
+    `layout` is stretch, column, stretch. Layout stretch rather than computed
+    margins, so a wide window's position never turns into a minimum width.
+    """
+    layout.setStretch(0, 1 if empty else 0)
+    layout.setStretch(1, 10)
+    layout.setStretch(2, 1 if empty else 0)
+    column.setMaximumWidth(width if empty else _NO_LIMIT)
 
 
 class _FileDropFilter(QObject):
@@ -133,13 +154,21 @@ class DropZone(QWidget):
         outro_layout.setContentsMargins(0, 16, 0, 0)
         outro_layout.addWidget(self._formats)
 
-        self._layout = QVBoxLayout(self)
+        self._column = QWidget()
+        column_layout = QVBoxLayout(self._column)
+        column_layout.setContentsMargins(0, 0, 0, 0)
+        column_layout.setSpacing(0)
+        column_layout.addStretch(2)
+        column_layout.addWidget(self._intro)
+        column_layout.addWidget(self._url_row)
+        column_layout.addWidget(self._outro)
+        column_layout.addStretch(3)
+
+        self._layout = QHBoxLayout(self)
         self._layout.setSpacing(0)
-        self._layout.addStretch(2)
-        self._layout.addWidget(self._intro)
-        self._layout.addWidget(self._url_row)
-        self._layout.addWidget(self._outro)
-        self._layout.addStretch(3)
+        self._layout.addStretch(1)
+        self._layout.addWidget(self._column, 10)
+        self._layout.addStretch(1)
 
         self.setTabOrder(self.browse_btn, self.folder_btn)
         self.setTabOrder(self.folder_btn, self.url_edit)
@@ -158,15 +187,21 @@ class DropZone(QWidget):
         self.style().polish(self)
 
         self._layout.setContentsMargins(*(_EMPTY_MARGINS if prominent else _FILLED_MARGINS))
-        self.setMaximumHeight(16777215 if prominent else FILLED_HEIGHT)
+        self.retranslate()
+        center_column(self._layout, self._column, prominent, self.column_width())
+        self._url_row.setMaximumWidth(_URL_ROW_WIDTH if prominent else _NO_LIMIT)
+        self.setMaximumHeight(_NO_LIMIT if prominent else FILLED_HEIGHT)
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred,
             QSizePolicy.Policy.Expanding if prominent else QSizePolicy.Policy.Fixed,
         )
         self._intro.setVisible(prominent)
         self._outro.setVisible(prominent)
-        self._url_row.setMaximumWidth(_URL_ROW_WIDTH if prominent else 16777215)
-        self.retranslate()
+
+    def column_width(self) -> int:
+        """The empty window's column, never narrower than the instruction."""
+        self._title.ensurePolished()
+        return max(EMPTY_COLUMN_WIDTH, self._title.sizeHint().width())
 
     def retranslate(self) -> None:
         self._title.setText(tr("dropzone.title.empty"))

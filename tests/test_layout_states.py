@@ -146,7 +146,7 @@ class SelectionPaintTests(LayoutTestCase):
             with self.subTest(x=x, y=y):
                 self.assertEqual(image.pixelColor(x, y), QColor(expected))
 
-    def test_selected_row_is_one_clean_band_with_no_bleed(self):
+    def test_selected_row_fill_is_one_clean_band_with_no_bleed(self):
         for theme in ("light", "dark"):
             with self.subTest(theme=theme):
                 self.window._set_theme_preference(theme)
@@ -158,7 +158,7 @@ class SelectionPaintTests(LayoutTestCase):
                 process_events()
                 tokens = tokens_for(theme)
                 image = self._viewport_image()
-                self._assert_row_color(image, 1, tokens.mark)
+                self._assert_row_color(image, 1, tokens.wash)
                 self._assert_row_color(image, 0, tokens.desk)
                 self._assert_row_color(image, 2, tokens.desk)
                 # The first empty pixel below the last row is plain desk too.
@@ -181,9 +181,9 @@ class SelectionPaintTests(LayoutTestCase):
             painter.end()
             return image
 
-        ink = QColor(tokens_for("light").on_mark)
-        mark = QColor(tokens_for("light").mark)
-        self.assertEqual(paint(QStyle.StateFlag.State_None).pixelColor(150, 0), mark)
+        ink = QColor(tokens_for("light").ink)
+        fill = QColor(tokens_for("light").wash)
+        self.assertEqual(paint(QStyle.StateFlag.State_None).pixelColor(150, 0), fill)
         self.assertEqual(paint(QStyle.StateFlag.State_HasFocus).pixelColor(150, 0), ink)
 
 
@@ -198,12 +198,11 @@ class StatusNeverByColorAloneTests(unittest.TestCase):
         link = QueueItem.from_url("https://www.youtube.com/watch?v=x")
         self.assertEqual(delegate._type_label(link), "YouTube")
 
-    def test_status_colors_are_readable_on_the_highlighter_when_selected(self):
+    def test_failure_keeps_its_color_on_a_selected_row(self):
         delegate = QueueItemDelegate()
         tokens = tokens_for("light")
-        item = make_item("a.txt", **FAILED)
-        _, color = delegate._status_parts(item, tokens, selected=True)
-        self.assertEqual(color, tokens.on_mark_danger)
+        _, color = delegate._status_parts(make_item("a.txt", **FAILED), tokens)
+        self.assertEqual(color, tokens.danger)
 
 
 class DropAnywhereTests(LayoutTestCase):

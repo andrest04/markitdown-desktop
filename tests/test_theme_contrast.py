@@ -13,39 +13,45 @@ TEXT_PAIRS = [
     # Body and secondary text on each surface.
     ("ink", "paper"),
     ("ink", "desk"),
+    ("ink", "hover"),
     ("ink", "wash"),
     ("ink", "wash_strong"),
     ("muted", "paper"),
     ("muted", "desk"),
+    ("muted", "hover"),
     ("muted", "wash"),
     # Failure text wherever a status can appear.
     ("danger", "paper"),
     ("danger", "desk"),
+    ("danger", "hover"),
     ("danger", "wash"),
     # Primary action in each of its states.
     ("primary_fg", "ink"),
     ("primary_fg", "primary_hover"),
     ("primary_fg", "primary_pressed"),
-    # Anything on the highlighter: selected rows, text selection, the empty
+    # Anything on the highlighter: the selected name, text selection, the empty
     # state instruction, the drag overlay, a focused primary action.
     ("on_mark", "mark"),
-    ("on_mark_muted", "mark"),
-    ("on_mark_danger", "mark"),
 ]
 
 # WCAG 1.4.11: control boundaries and meaningful graphics.
 NON_TEXT_PAIRS = [
     ("edge", "paper"),
     ("edge", "desk"),
-    # Focus ring on a quiet control or a row; the row ring sits on the mark.
+    # Focus ring on a quiet control or a row, selected or not; the product mark.
     ("ink", "desk"),
     ("ink", "paper"),
+    ("ink", "wash"),
     ("on_mark", "mark"),
-    # Status glyphs are drawn in the text colors of their row.
+    # State marks and the row's retry outline, on every row fill.
     ("muted", "desk"),
+    ("muted", "hover"),
+    ("muted", "wash"),
     ("danger", "desk"),
-    ("on_mark_muted", "mark"),
-    ("on_mark_danger", "mark"),
+    ("danger", "hover"),
+    ("danger", "wash"),
+    ("edge", "hover"),
+    ("edge", "wash"),
     # Progress bar chunk on its track.
     ("ink", "wash"),
 ]

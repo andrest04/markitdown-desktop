@@ -44,6 +44,7 @@ from app.core.converter import (
     classify_paths,
     default_basename,
     export_markdown,
+    get_downloads_dir,
     supported_name_filter,
 )
 from app.core.queue_model import (
@@ -58,8 +59,16 @@ from app.i18n import LANG_EN, LANG_ES, tr
 from app.i18n import manager as i18n_manager
 from app.ui.about_dialog import AboutDialog
 from app.ui.advanced_settings_dialog import AdvancedSettingsDialog
-from app.ui.drop_zone import DropZone
-from app.ui.queue_delegate import ROW_HEIGHT, QueueItemDelegate
+from app.ui.drop_zone import EMPTY_GUTTER, DropZone, center_column, empty_column_left
+from app.ui.queue_delegate import (
+    RETRY_STATES,
+    ROW_HEIGHT,
+    BrandMark,
+    QueueItemDelegate,
+    StatusMark,
+    brief_error,
+    queue_summary,
+)
 from app.ui.theme import (
     READING_WIDTH,
     apply_fusion_palette,
@@ -83,19 +92,16 @@ _HEADER_STATUS = {
 
 _SPINNER_INTERVAL_MS = 90
 _COPY_FEEDBACK_MS = 1500
-_BRIEF_ERROR_CHARS = 200
 _LIST_WIDTH = 340
 # With the view's 2px focus border this lines the text up with the pane header.
 _SHEET_MARGIN = 22
 _PANE_MARGIN = 24
 _PROGRESS_HEIGHT = 2
-
-
-def _brief_error(message: str) -> str:
-    """First line of a conversion error, short enough for the status line."""
-    lines = message.strip().splitlines()
-    first = lines[0] if lines else ""
-    return first if len(first) <= _BRIEF_ERROR_CHARS else first[:_BRIEF_ERROR_CHARS].rstrip() + "…"
+_BRAND_MARGINS_EMPTY = (EMPTY_GUTTER, 18, EMPTY_GUTTER, 0)
+# Centers the mark on the state marks below and starts the name on their text edge.
+_BRAND_MARGINS_FILLED = (12, 14, 14, 10)
+# Fits a headline and a detail line, so rows never shift when one goes away.
+_SUMMARY_HEIGHT = 46
 
 
 def detect_system_theme() -> str:
@@ -176,6 +182,12 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.status_bar.setSizeGripEnabled(False)
         self.setStatusBar(self.status_bar)
+        # What the strip says at rest. Messages cover it for a moment, then it returns.
+        self.saving_to_label = QLabel()
+        self.saving_to_label.setObjectName("SavingTo")
+        self.saving_to_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.status_bar.addWidget(self.saving_to_label, 1)
+        self._retranslate_saving_to()
 
         # Floats over the panes, so a batch starting never shifts the layout.
         self.progress_bar = QProgressBar(central)
@@ -211,6 +223,7 @@ class MainWindow(QMainWindow):
         if event.type() == QEvent.Type.Resize:
             if watched is self.centralWidget():
                 self.drag_overlay.setGeometry(watched.rect())
+                self.drag_overlay.setIndent(empty_column_left(watched.width(), self.drop_zone.column_width()))
                 self.progress_bar.setGeometry(0, 0, watched.width(), _PROGRESS_HEIGHT)
             elif watched is self.preview_panel:
                 self._fit_preview_title()
@@ -240,7 +253,9 @@ class MainWindow(QMainWindow):
             on_folder=self.action_add_folder,
         )
         self.url_edit = self.drop_zone.url_edit
-        layout.addWidget(self.drop_zone)
+
+        layout.addLayout(self._build_brand_row())
+        layout.addWidget(self._build_queue_summary())
 
         self.table_view = QTableView()
         self.table_view.setObjectName("QueueView")
@@ -266,11 +281,16 @@ class MainWindow(QMainWindow):
         self.table_view.customContextMenuRequested.connect(self._show_queue_menu)
         self.table_view.selectionModel().selectionChanged.connect(self._on_selection_changed)
         self.table_view.doubleClicked.connect(self._on_row_double_clicked)
+        self.queue_delegate.retry_requested.connect(lambda row: self._start_conversion([row]))
         layout.addWidget(self.table_view, 1)
+        # Every way to add something sits together below the list; above it, the
+        # name and the answer. An empty window gives the whole pane to this zone.
+        layout.addWidget(self.drop_zone, 1)
 
         self.queue_controls_widget = QWidget()
         queue_controls_layout = QHBoxLayout(self.queue_controls_widget)
-        queue_controls_layout.setContentsMargins(8, 6, 8, 8)
+        # With a ghost button's padding, the labels land on the pane's 14px edges.
+        queue_controls_layout.setContentsMargins(4, 0, 4, 8)
         queue_controls_layout.setSpacing(2)
         self.add_files_btn = QPushButton(tr("button.add_files"))
         self.add_files_btn.clicked.connect(self.action_add_files)
@@ -287,12 +307,81 @@ class MainWindow(QMainWindow):
             signal.connect(self._update_drop_zone_prominence)
         for signal in (self.model.dataChanged, self.model.rowsInserted, self.model.rowsRemoved, self.model.modelReset):
             signal.connect(self._sync_spinner)
+            signal.connect(self._refresh_queue_summary)
 
         return panel
+
+    def _build_brand_row(self) -> QHBoxLayout:
+        self._brand_row = QHBoxLayout()
+        self._brand_row.setSpacing(0)
+        self._brand_column = QWidget()
+        column = QHBoxLayout(self._brand_column)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(8)
+        self.brand_mark = BrandMark()
+        self.brand_name = QLabel(tr("window.title"))
+        self.brand_name.setObjectName("BrandName")
+        column.addWidget(self.brand_mark)
+        column.addWidget(self.brand_name)
+        column.addStretch(1)
+        self._brand_row.addStretch(1)
+        self._brand_row.addWidget(self._brand_column, 10)
+        self._brand_row.addStretch(1)
+        return self._brand_row
+
+    def _build_queue_summary(self) -> QWidget:
+        self.queue_summary = QWidget()
+        self.queue_summary.setFixedHeight(_SUMMARY_HEIGHT)
+        row = QHBoxLayout(self.queue_summary)
+        row.setContentsMargins(14, 0, 14, 8)
+        row.setSpacing(10)
+        self.summary_mark = StatusMark()
+        self.summary_headline = QLabel()
+        self.summary_headline.setObjectName("SummaryHeadline")
+        self.summary_detail = QLabel()
+        self.summary_detail.setObjectName("SummaryDetail")
+        for label in (self.summary_headline, self.summary_detail):
+            # The pane sets the width; the full line is also the tooltip.
+            label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        text = QVBoxLayout()
+        text.setContentsMargins(0, 0, 0, 0)
+        text.setSpacing(2)
+        text.addWidget(self.summary_headline)
+        text.addWidget(self.summary_detail)
+        text.addStretch(1)
+        mark_column = QVBoxLayout()
+        mark_column.setContentsMargins(0, 1, 0, 0)
+        mark_column.addWidget(self.summary_mark)
+        mark_column.addStretch(1)
+        row.addLayout(mark_column)
+        row.addLayout(text, 1)
+        self.queue_summary.setVisible(False)
+        return self.queue_summary
+
+    def _refresh_queue_summary(self, *args) -> None:
+        summary = queue_summary(self.model.items())
+        self.queue_summary.setVisible(summary is not None)
+        if summary is None:
+            return
+        self.summary_mark.set_glyph(summary.glyph, summary.attention)
+        self.summary_headline.setText(summary.headline)
+        self.summary_detail.setText(summary.detail)
+        self.queue_summary.setToolTip(", ".join(part for part in (summary.headline, summary.detail) if part))
+        if self.summary_headline.property("attention") != summary.attention:
+            self.summary_headline.setProperty("attention", summary.attention)
+            self.summary_headline.style().unpolish(self.summary_headline)
+            self.summary_headline.style().polish(self.summary_headline)
+
+    def _retranslate_saving_to(self) -> None:
+        path = str(get_downloads_dir())
+        self.saving_to_label.setText(tr("statusbar.saving_to", path=path))
+        self.saving_to_label.setToolTip(path)
 
     def _update_drop_zone_prominence(self, *args) -> None:
         empty = len(self.model.items()) == 0
         self.drop_zone.set_prominent(empty)
+        self._brand_row.setContentsMargins(*(_BRAND_MARGINS_EMPTY if empty else _BRAND_MARGINS_FILLED))
+        center_column(self._brand_row, self._brand_column, empty, self.drop_zone.column_width())
         self.left_panel.setProperty("empty", empty)
         self.left_panel.style().unpolish(self.left_panel)
         self.left_panel.style().polish(self.left_panel)
@@ -488,6 +577,17 @@ class MainWindow(QMainWindow):
 
     def _install_shortcuts(self) -> None:
         QShortcut(QKeySequence.StandardKey.Delete, self.table_view, self.action_remove_selected)
+        # The pane reads top to bottom, and so does the keyboard.
+        zone = self.drop_zone
+        for first, second in (
+            (self.table_view, zone.browse_btn),
+            (zone.browse_btn, zone.folder_btn),
+            (zone.folder_btn, zone.url_edit),
+            (zone.url_edit, zone.add_url_btn),
+            (zone.add_url_btn, self.add_files_btn),
+            (self.add_files_btn, self.clear_btn),
+        ):
+            self.setTabOrder(first, second)
         # Mouse clicks leave focus alone, so a focus ring only ever means the keyboard.
         for button in self.findChildren(QPushButton):
             button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
@@ -543,7 +643,10 @@ class MainWindow(QMainWindow):
         """Re-pull every user-facing string from tr() so the currently
         visible UI updates immediately, with no restart required."""
         self.setWindowTitle(tr("window.title"))
-        self.drop_zone.retranslate()
+        self._update_drop_zone_prominence()
+        self.brand_name.setText(tr("window.title"))
+        self._retranslate_saving_to()
+        self._refresh_queue_summary()
         self.add_files_btn.setText(tr("button.add_files"))
         self.clear_btn.setText(tr("button.clear_all"))
         self.open_file_btn.setText(tr("button.open_file"))
@@ -745,9 +848,9 @@ class MainWindow(QMainWindow):
         state = item.display_state
         key, kind = _HEADER_STATUS[state]
         if state == DisplayState.SAVE_FAILED:
-            status = tr("status.save_failed_detail", error=_brief_error(item.save_error))
+            status = tr("status.save_failed_detail", error=brief_error(item.save_error))
         elif state == DisplayState.ERROR:
-            status = _brief_error(item.error_message) or tr(key)
+            status = brief_error(item.error_message) or tr(key)
         else:
             status = tr(key)
         self.preview_header_status.setText(status)
@@ -757,7 +860,7 @@ class MainWindow(QMainWindow):
         self.preview_header_status.style().polish(self.preview_header_status)
 
         saved = state == DisplayState.SAVED
-        retry = state in (DisplayState.ERROR, DisplayState.SAVE_FAILED)
+        retry = state in RETRY_STATES
         copy = self._has_result(item)
         self.open_file_btn.setVisible(saved)
         self.reveal_btn.setVisible(saved)
@@ -806,7 +909,7 @@ class MainWindow(QMainWindow):
         self.save_copy_action.setEnabled(result)
         self.open_file_action.setEnabled(saved)
         self.reveal_action.setEnabled(saved)
-        self.retry_action.setEnabled(state in (DisplayState.ERROR, DisplayState.SAVE_FAILED))
+        self.retry_action.setEnabled(state in RETRY_STATES)
         self.remove_action.setEnabled(item is not None)
 
     def _fit_preview_title(self) -> None:
@@ -841,6 +944,7 @@ class MainWindow(QMainWindow):
 
     def _advance_spinner(self) -> None:
         self.queue_delegate.advance_spinner()
+        self.summary_mark.set_angle(self.queue_delegate.spin_angle)
         self.table_view.viewport().update()
 
     def _on_row_double_clicked(self, index) -> None:
@@ -908,7 +1012,7 @@ class MainWindow(QMainWindow):
         if item is not None and item.saved_path:
             menu.addAction(tr("menu.open_file"), lambda: self._open_file(item.saved_path))
             menu.addAction(tr("menu.open_folder"), lambda: self._open_containing_folder(item.saved_path))
-        if item is not None and item.status == ItemStatus.ERROR:
+        if item is not None and item.display_state in RETRY_STATES:
             menu.addAction(tr("menu.retry"), lambda: self._start_conversion([index.row()]))
         if item is not None:
             menu.addAction(tr("menu.remove"), self.action_remove_selected)
