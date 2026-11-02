@@ -52,6 +52,7 @@ from app.core.converter import (
 from app.core.queue_model import (
     COLUMN_STATUS,
     COLUMN_TYPE,
+    DisplayState,
     ItemStatus,
     QueueItem,
     QueueTableModel,
@@ -67,6 +68,16 @@ from app.ui.theme import apply_fusion_palette, stylesheet_for
 
 ORG_NAME = "andres"
 APP_NAME = "MarkItDownDesktop"
+
+# Preview header per state: translation key and the stylesheet `kind` property.
+_HEADER_STATUS = {
+    DisplayState.PENDING: ("preview.pending", "pending"),
+    DisplayState.CONVERTING: ("preview.converting", "converting"),
+    DisplayState.DONE: ("status.done", "pending"),
+    DisplayState.SAVED: ("status.done_saved", "saved"),
+    DisplayState.SAVE_FAILED: ("status.done_save_failed", "error"),
+    DisplayState.ERROR: ("preview.failed", "error"),
+}
 
 
 def detect_system_theme() -> str:
@@ -656,7 +667,7 @@ class MainWindow(QMainWindow):
     def _on_conversion_started(self, item: QueueItem) -> None:
         row = self.model.row_of(item)
         if row >= 0:
-            item.status = ItemStatus.CONVERTING
+            item.mark_converting()
             self.model.refresh_row(row)
             if self._selected_row() == row:
                 self._refresh_preview()
@@ -664,9 +675,7 @@ class MainWindow(QMainWindow):
     def _on_conversion_finished(self, item: QueueItem, markdown_text: str) -> None:
         row = self.model.row_of(item)
         if row >= 0:
-            item.status = ItemStatus.DONE
-            item.markdown_result = markdown_text
-            item.error_message = ""
+            item.mark_converted(markdown_text)
             self._auto_save_to_downloads(item)
             self.model.refresh_row(row)
             if self._selected_row() < 0:
@@ -682,19 +691,16 @@ class MainWindow(QMainWindow):
         try:
             saved_path = auto_save_markdown(item, item.markdown_result or "")
         except OSError as exc:
-            item.saved_path = ""
-            item.save_error = str(exc)
+            item.mark_save_failed(str(exc))
             self.status_bar.showMessage(tr("status.autosave_failed", error=exc), 6000)
         else:
-            item.saved_path = str(saved_path)
-            item.save_error = ""
+            item.mark_saved(str(saved_path))
             self.status_bar.showMessage(tr("status.saved_to", path=saved_path), 5000)
 
     def _on_conversion_failed(self, item: QueueItem, message: str) -> None:
         row = self.model.row_of(item)
         if row >= 0:
-            item.status = ItemStatus.ERROR
-            item.error_message = message
+            item.mark_failed(message)
             self.model.refresh_row(row)
             if self._selected_row() == row:
                 self._refresh_preview()
@@ -744,34 +750,17 @@ class MainWindow(QMainWindow):
             return
         self.preview_header.setVisible(True)
         self.preview_header_name.setText(item.display_name)
-        saved = bool(item.status == ItemStatus.DONE and item.saved_path)
-        failed = item.status == ItemStatus.ERROR or (item.status == ItemStatus.DONE and bool(item.save_error))
-        converting = item.status == ItemStatus.CONVERTING
-        if saved:
-            status = tr("status.done_saved")
-            kind = "saved"
-        elif item.status == ItemStatus.DONE and item.save_error:
-            status = tr("status.done_save_failed")
-            kind = "error"
-        elif item.status == ItemStatus.ERROR:
-            status = item.error_message or tr("preview.failed")
-            kind = "error"
-        elif converting:
-            status = tr("preview.converting")
-            kind = "converting"
-        elif item.status == ItemStatus.PENDING:
-            status = tr("preview.pending")
-            kind = "pending"
-        else:
-            status = tr(item.status.value)
-            kind = "pending"
-        self.preview_header_status.setText(status)
+        state = item.display_state
+        key, kind = _HEADER_STATUS[state]
+        message = item.error_message if state == DisplayState.ERROR else ""
+        self.preview_header_status.setText(message or tr(key))
         self.preview_header_status.setProperty("kind", kind)
         self.preview_header_status.style().unpolish(self.preview_header_status)
         self.preview_header_status.style().polish(self.preview_header_status)
+        saved = state == DisplayState.SAVED
         self.open_file_btn.setVisible(saved)
         self.reveal_btn.setVisible(saved)
-        self.retry_header_btn.setVisible(failed and not converting)
+        self.retry_header_btn.setVisible(state in (DisplayState.ERROR, DisplayState.SAVE_FAILED))
 
     def _show_preview_empty(self, title: str, hint: str) -> None:
         self.preview_empty_title.setText(title)

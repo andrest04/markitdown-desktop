@@ -21,6 +21,21 @@ class ItemStatus(Enum):
     ERROR = "status.error"
 
 
+class DisplayState(Enum):
+    """What an item means to the user, derived from status + save outcome.
+
+    Values are translation KEYS, for the same reason as ItemStatus. Read it
+    through `QueueItem.display_state`; never store it.
+    """
+
+    PENDING = "status.pending"
+    CONVERTING = "status.converting"
+    DONE = "status.done"
+    SAVED = "status.done_saved"
+    SAVE_FAILED = "status.done_save_failed"
+    ERROR = "status.error"
+
+
 class SourceKind(Enum):
     FILE = "File"
     URL = "URL"
@@ -55,6 +70,42 @@ class QueueItem:
 
     def display_source(self) -> str:
         return self.display_name
+
+    @property
+    def display_state(self) -> DisplayState:
+        if self.status == ItemStatus.PENDING:
+            return DisplayState.PENDING
+        if self.status == ItemStatus.CONVERTING:
+            return DisplayState.CONVERTING
+        if self.status == ItemStatus.ERROR:
+            return DisplayState.ERROR
+        if self.saved_path:
+            return DisplayState.SAVED
+        if self.save_error:
+            return DisplayState.SAVE_FAILED
+        return DisplayState.DONE
+
+    def mark_converting(self) -> None:
+        self.status = ItemStatus.CONVERTING
+
+    def mark_converted(self, markdown_text: str) -> None:
+        self.status = ItemStatus.DONE
+        self.markdown_result = markdown_text
+        self.error_message = ""
+
+    def mark_failed(self, message: str) -> None:
+        """A failed retry keeps `saved_path`: the earlier file still exists."""
+        self.status = ItemStatus.ERROR
+        self.error_message = message
+
+    def mark_saved(self, path: str) -> None:
+        self.saved_path = str(path)
+        self.save_error = ""
+
+    def mark_save_failed(self, error: str) -> None:
+        """The conversion itself succeeded, so the status stays DONE."""
+        self.saved_path = ""
+        self.save_error = str(error)
 
 
 COLUMN_NAME = 0
@@ -102,20 +153,19 @@ class QueueTableModel(QAbstractTableModel):
             if col == COLUMN_TYPE:
                 return tr(item.detected_type) if item.detected_type else "?"
             if col == COLUMN_STATUS:
-                if item.status == ItemStatus.DONE and item.saved_path:
-                    return tr("status.done_saved")
-                if item.status == ItemStatus.DONE and item.save_error:
-                    return tr("status.done_save_failed")
-                return tr(item.status.value)
+                return tr(item.display_state.value)
             return None
 
         if role == Qt.ItemDataRole.ToolTipRole:
-            if col == COLUMN_STATUS and item.status == ItemStatus.ERROR:
-                return item.error_message
-            if col == COLUMN_STATUS and item.status == ItemStatus.DONE and item.saved_path:
-                return tr("tooltip.saved_to", path=item.saved_path)
-            if col == COLUMN_STATUS and item.status == ItemStatus.DONE and item.save_error:
-                return tr("tooltip.save_failed", error=item.save_error)
+            if col == COLUMN_STATUS:
+                state = item.display_state
+                if state == DisplayState.ERROR:
+                    return item.error_message
+                if state == DisplayState.SAVED:
+                    return tr("tooltip.saved_to", path=item.saved_path)
+                if state == DisplayState.SAVE_FAILED:
+                    return tr("tooltip.save_failed", error=item.save_error)
+                return None
             if col == COLUMN_NAME:
                 return item.source
             return None

@@ -10,12 +10,23 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
 )
 
-from app.core.queue_model import ItemStatus, QueueTableModel
+from app.core.queue_model import DisplayState, QueueTableModel
 from app.i18n import tr
 from app.ui.theme import tokens_for
 
 ROW_HEIGHT = 68
 RADIUS = 10
+
+# Per state: theme token for the status line, then the pill's translation key
+# and its foreground/background theme tokens.
+_STATE_STYLES = {
+    DisplayState.PENDING: ("muted", "status.pill.pending", "muted", "sunken"),
+    DisplayState.CONVERTING: ("mark", "status.pill.converting", "mark", "mark_tint"),
+    DisplayState.DONE: ("muted", "status.pill.pending", "muted", "sunken"),
+    DisplayState.SAVED: ("mark", "status.pill.saved", "mark", "mark_tint"),
+    DisplayState.SAVE_FAILED: ("danger", "status.pill.save_failed", "danger", "danger_tint"),
+    DisplayState.ERROR: ("danger", "status.pill.error", "danger", "danger_tint"),
+}
 
 
 class QueueItemDelegate(QStyledItemDelegate):
@@ -109,23 +120,10 @@ class QueueItemDelegate(QStyledItemDelegate):
         painter.restore()
 
     def _status_parts(self, item, t) -> tuple[str, str]:
-        if item.status == ItemStatus.DONE and item.saved_path:
-            return tr("status.done_saved"), t.mark
-        if item.status == ItemStatus.DONE and item.save_error:
-            return tr("status.done_save_failed"), t.danger
-        if item.status == ItemStatus.ERROR:
-            return tr(item.status.value), t.danger
-        if item.status == ItemStatus.CONVERTING:
-            return tr(item.status.value), t.mark
-        return tr(item.status.value), t.muted
+        state = item.display_state
+        color, _, _, _ = _STATE_STYLES[state]
+        return tr(state.value), getattr(t, color)
 
     def _pill_parts(self, item, t) -> tuple[str, str, str]:
-        if item.status == ItemStatus.DONE and item.saved_path:
-            return tr("status.pill.saved"), t.mark, t.mark_tint
-        if item.status == ItemStatus.DONE and item.save_error:
-            return tr("status.pill.save_failed"), t.danger, t.danger_tint
-        if item.status == ItemStatus.ERROR:
-            return tr("status.pill.error"), t.danger, t.danger_tint
-        if item.status == ItemStatus.CONVERTING:
-            return tr("status.pill.converting"), t.mark, t.mark_tint
-        return tr("status.pill.pending"), t.muted, t.sunken
+        _, pill_key, foreground, background = _STATE_STYLES[item.display_state]
+        return tr(pill_key), getattr(t, foreground), getattr(t, background)
