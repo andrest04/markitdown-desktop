@@ -35,7 +35,7 @@ from __future__ import annotations
 import os
 import re
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from pathlib import Path
@@ -126,6 +126,34 @@ def auto_save_markdown(item: QueueItem, markdown_text: str, downloads_dir: Path 
     path.write_text(markdown_text, encoding="utf-8")
     return path
 
+
+@dataclass
+class ExportResult:
+    """What `export_markdown` wrote, and which items failed with which error."""
+
+    written: list[Path] = field(default_factory=list)
+    failures: list[tuple[QueueItem, str]] = field(default_factory=list)
+
+
+def export_markdown(items: list[QueueItem], folder: str | Path) -> ExportResult:
+    """Write each item's markdown into `folder`, never overwriting a file.
+
+    A failed item is recorded in the result and the rest still run, so
+    OSError never reaches the caller.
+    """
+    directory = Path(folder)
+    result = ExportResult()
+    for item in items:
+        try:
+            path = unique_download_path(directory, sanitize_filename(default_basename(item)))
+            path.write_text(item.markdown_result or "", encoding="utf-8")
+        except OSError as exc:
+            result.failures.append((item, str(exc)))
+        else:
+            result.written.append(path)
+    return result
+
+
 # Extensions markitdown's built-in converters recognize (used to filter
 # recursive folder scans). PlainTextConverter/HtmlConverter also catch many
 # text/* and application/*+xml mimetypes generically, but for a folder scan
@@ -149,9 +177,13 @@ def supported_name_filter(label: str) -> str:
     return f"{label} ({patterns})"
 
 
-@dataclass
+@dataclass(frozen=True)
 class ConversionOptions:
-    """Options mirrored from the Options panel, mapped to real MarkItDown kwargs."""
+    """Conversion settings, mapped to real MarkItDown kwargs.
+
+    Frozen: workers on other threads hold the same instance, so a settings
+    change replaces it (see `dataclasses.replace`) instead of mutating it.
+    """
 
     enable_plugins: bool = False
     keep_data_uris: bool = False
@@ -205,17 +237,6 @@ def convert_item(item: QueueItem, options: ConversionOptions) -> str:
     return result.text_content
 
 
-def detect_type_label(source: str, kind: SourceKind) -> str:
-    """Best-effort, cheap type label for the queue table (no conversion)."""
-    if kind == SourceKind.URL:
-        lowered = source.lower()
-        if "youtube.com" in lowered or "youtu.be" in lowered:
-            return "YouTube"
-        return "type.webpage"
-    ext = os.path.splitext(source)[1].lower()
-    return ext.lstrip(".").upper() if ext else "type.file"
-
-
 def iter_supported_files(folder: str):
     """Recursively yield file paths under `folder` matching SUPPORTED_EXTENSIONS."""
     for root, _dirs, files in os.walk(folder):
@@ -225,12 +246,44 @@ def iter_supported_files(folder: str):
                 yield os.path.join(root, name)
 
 
+@dataclass(frozen=True)
+class ClassifiedPaths:
+    """Dropped or browsed paths, sorted out for queueing."""
+
+    files: list[str]
+    skipped: int  # explicitly given files with an unsupported extension
+    saw_folder: bool
+
+
+def classify_paths(paths: list[str]) -> ClassifiedPaths:
+    """Expand folders and filter by extension, keeping the given order.
+
+    Unsupported files inside a folder are not counted as skipped; only files
+    the user pointed at directly are. Paths that do not exist are ignored.
+    """
+    files: list[str] = []
+    skipped = 0
+    saw_folder = False
+    for path in paths:
+        if os.path.isdir(path):
+            saw_folder = True
+            files.extend(iter_supported_files(path))
+        elif os.path.isfile(path):
+            if is_supported_file(path):
+                files.append(path)
+            else:
+                skipped += 1
+    return ClassifiedPaths(files, skipped, saw_folder)
+
+
 class WorkerSignals(QObject):
     """Signals for ConversionWorker; QRunnable itself cannot emit signals."""
 
-    started = Signal(int)
-    finished = Signal(int, str)
-    failed = Signal(int, str)
+    # Payload is the QueueItem itself: rows shift when the queue is edited
+    # while a conversion runs, identity does not.
+    started = Signal(object)
+    finished = Signal(object, str)
+    failed = Signal(object, str)
 
 
 class ConversionWorker(QRunnable):
@@ -241,18 +294,17 @@ class ConversionWorker(QRunnable):
     (the default for cross-thread signal/slot connections).
     """
 
-    def __init__(self, row: int, item: QueueItem, options: ConversionOptions):
+    def __init__(self, item: QueueItem, options: ConversionOptions):
         super().__init__()
-        self.row = row
         self.item = item
         self.options = options
         self.signals = WorkerSignals()
 
     def run(self) -> None:
-        self.signals.started.emit(self.row)
+        self.signals.started.emit(self.item)
         try:
             markdown_text = convert_item(self.item, self.options)
         except Exception as exc:  # noqa: BLE001 - must catch everything per-item
-            self.signals.failed.emit(self.row, str(exc))
+            self.signals.failed.emit(self.item, str(exc))
         else:
-            self.signals.finished.emit(self.row, markdown_text)
+            self.signals.finished.emit(self.item, markdown_text)

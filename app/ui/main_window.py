@@ -7,7 +7,7 @@ import sys
 import webbrowser
 
 import markdown as markdown_lib
-from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QThreadPool, QUrl
+from PySide6.QtCore import QSettings, Qt, QUrl
 from PySide6.QtGui import (
     QAction,
     QDesktopServices,
@@ -38,24 +38,21 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.conversion_queue import ConversionQueue
 from app.core.converter import (
     ConversionOptions,
-    ConversionWorker,
-    auto_save_markdown,
+    classify_paths,
     default_basename,
-    detect_type_label,
-    is_supported_file,
-    iter_supported_files,
-    sanitize_filename,
+    export_markdown,
     supported_name_filter,
 )
 from app.core.queue_model import (
     COLUMN_STATUS,
     COLUMN_TYPE,
+    DisplayState,
     ItemStatus,
     QueueItem,
     QueueTableModel,
-    SourceKind,
 )
 from app.i18n import LANG_EN, LANG_ES, tr
 from app.i18n import manager as i18n_manager
@@ -68,6 +65,16 @@ from app.ui.theme import apply_fusion_palette, stylesheet_for
 ORG_NAME = "andres"
 APP_NAME = "MarkItDownDesktop"
 
+# Preview header per state: translation key and the stylesheet `kind` property.
+_HEADER_STATUS = {
+    DisplayState.PENDING: ("preview.pending", "pending"),
+    DisplayState.CONVERTING: ("preview.converting", "converting"),
+    DisplayState.DONE: ("status.done", "pending"),
+    DisplayState.SAVED: ("status.done_saved", "saved"),
+    DisplayState.SAVE_FAILED: ("status.done_save_failed", "error"),
+    DisplayState.ERROR: ("preview.failed", "error"),
+}
+
 
 def detect_system_theme() -> str:
     """Best-effort light/dark detection based on the current QPalette."""
@@ -75,35 +82,6 @@ def detect_system_theme() -> str:
     window_color = palette.color(palette.ColorRole.Window)
     luminance = 0.299 * window_color.red() + 0.587 * window_color.green() + 0.114 * window_color.blue()
     return "dark" if luminance < 128 else "light"
-
-
-class _FileDropFilter(QObject):
-    """Accept file drops on panes that are not the drop zone itself."""
-
-    def __init__(self, on_paths, set_active, parent=None):
-        super().__init__(parent)
-        self._on_paths = on_paths
-        self._set_active = set_active
-
-    def eventFilter(self, watched, event):
-        et = event.type()
-        if et == QEvent.Type.DragEnter:
-            mime = event.mimeData()
-            if mime is not None and mime.hasUrls():
-                event.acceptProposedAction()
-                self._set_active(True)
-                return True
-        elif et == QEvent.Type.DragLeave:
-            self._set_active(False)
-        elif et == QEvent.Type.Drop:
-            self._set_active(False)
-            mime = event.mimeData()
-            paths = [url.toLocalFile() for url in mime.urls() if url.isLocalFile()]
-            if paths:
-                self._on_paths(paths)
-            event.acceptProposedAction()
-            return True
-        return False
 
 
 class MainWindow(QMainWindow):
@@ -117,20 +95,19 @@ class MainWindow(QMainWindow):
         self.resize(1180, 780)
         self.setMinimumSize(880, 600)
 
-        self.thread_pool = QThreadPool.globalInstance()
-        self._active_workers = 0
-        self._total_batch = 0
         self._preview_item: QueueItem | None = None
 
-        self.enable_plugins = False
-        self.keep_data_uris = False
-        self.docintel_enabled = False
-        self.docintel_endpoint = ""
-        self.cu_enabled = False
-        self.cu_endpoint = ""
-        self.cu_analyzer_id = ""
+        self.conversion_options = ConversionOptions()
 
         self.model = QueueTableModel(self)
+        self.conversion_queue = ConversionQueue(self.model, parent=self)
+        self.conversion_queue.item_started.connect(self._on_item_started)
+        self.conversion_queue.item_finished.connect(self._on_item_finished)
+        self.conversion_queue.item_failed.connect(self._on_item_failed)
+        self.conversion_queue.item_saved.connect(self._on_item_saved)
+        self.conversion_queue.item_save_failed.connect(self._on_item_save_failed)
+        self.conversion_queue.progress_changed.connect(self._on_progress_changed)
+        self.conversion_queue.batch_finished.connect(self._on_batch_finished)
 
         self._build_ui()
         self._build_menu()
@@ -168,14 +145,7 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
 
-        self._drop_filter = _FileDropFilter(
-            self._add_paths,
-            lambda active: self.drop_zone.set_drag_active(active),
-            self,
-        )
-        for widget in (self.left_panel, self.preview_panel, self.table_view.viewport()):
-            widget.setAcceptDrops(True)
-            widget.installEventFilter(self._drop_filter)
+        self.drop_zone.accept_drops_on(self.left_panel, self.preview_panel, self.table_view.viewport())
 
     def _build_left_panel(self) -> QWidget:
         panel = QWidget()
@@ -521,51 +491,34 @@ class MainWindow(QMainWindow):
             self._add_paths([folder])
 
     def _add_paths(self, paths: list[str]) -> None:
-        added_rows: list[int] = []
-        skipped = 0
-        saw_folder = False
-        for path in paths:
-            if os.path.isdir(path):
-                saw_folder = True
-                for file_path in iter_supported_files(path):
-                    row = self._add_single_file(file_path)
-                    if row is not None:
-                        added_rows.append(row)
-            elif os.path.isfile(path):
-                if not is_supported_file(path):
-                    skipped += 1
-                    continue
-                row = self._add_single_file(path)
-                if row is not None:
-                    added_rows.append(row)
-        if added_rows:
-            message = tr("status.added_files", count=len(added_rows))
-            if skipped:
-                message = f"{message} {tr('status.skipped_unsupported', count=skipped)}"
+        classified = classify_paths(paths)
+        new_items: list[QueueItem] = []
+        new_sources: set[str] = set()
+        for file_path in classified.files:
+            item = QueueItem.from_path(file_path)
+            if item.source not in new_sources and not self.model.source_exists(item.source):
+                new_sources.add(item.source)
+                new_items.append(item)
+        if new_items:
+            message = tr("status.added_files", count=len(new_items))
+            if classified.skipped:
+                message = f"{message} {tr('status.skipped_unsupported', count=classified.skipped)}"
             self.status_bar.showMessage(message, 4000)
-            if self._selected_row() < 0:
-                self.table_view.selectRow(added_rows[0])
-            self._start_conversion(added_rows)
+            self._enqueue_and_start(new_items)
             return
-        if skipped or saw_folder:
+        if classified.skipped or classified.saw_folder:
             QMessageBox.information(
                 self,
                 tr("msgbox.unsupported.title"),
                 tr("msgbox.unsupported.text"),
             )
 
-    def _add_single_file(self, path: str) -> int | None:
-        abs_path = os.path.abspath(path)
-        if self.model.source_exists(abs_path):
-            return None
-        item = QueueItem(
-            source=abs_path,
-            kind=SourceKind.FILE,
-            display_name=os.path.basename(abs_path),
-            detected_type=detect_type_label(abs_path, SourceKind.FILE),
-        )
-        self.model.add_item(item)
-        return len(self.model.items()) - 1
+    def _enqueue_and_start(self, items: list[QueueItem]) -> None:
+        """Add new items to the queue and start converting them right away."""
+        rows = [self.model.add_item(item) for item in items]
+        if self._selected_row() < 0:
+            self.table_view.selectRow(rows[0])
+        self.conversion_queue.enqueue(items, self.conversion_options)
 
     def action_add_url(self) -> None:
         url = self.url_edit.text().strip()
@@ -577,18 +530,8 @@ class MainWindow(QMainWindow):
         if self.model.source_exists(url):
             self.status_bar.showMessage(tr("status.url_already_queued"), 3000)
             return
-        item = QueueItem(
-            source=url,
-            kind=SourceKind.URL,
-            display_name=url,
-            detected_type=detect_type_label(url, SourceKind.URL),
-        )
-        self.model.add_item(item)
         self.url_edit.clear()
-        row = len(self.model.items()) - 1
-        if self._selected_row() < 0:
-            self.table_view.selectRow(row)
-        self._start_conversion([row])
+        self._enqueue_and_start([QueueItem.from_url(url)])
 
     def action_remove_selected(self) -> None:
         rows = sorted({idx.row() for idx in self.table_view.selectionModel().selectedRows()})
@@ -602,21 +545,6 @@ class MainWindow(QMainWindow):
         self.rendered_view.clear()
         self._refresh_preview()
 
-    def _current_options(self) -> ConversionOptions:
-        return ConversionOptions(
-            enable_plugins=self.enable_plugins,
-            keep_data_uris=self.keep_data_uris,
-            docintel_enabled=self.docintel_enabled,
-            docintel_endpoint=self.docintel_endpoint,
-            cu_enabled=self.cu_enabled,
-            cu_endpoint=self.cu_endpoint,
-            cu_analyzer_id=self.cu_analyzer_id,
-        )
-
-    def action_convert_all(self) -> None:
-        rows = list(range(len(self.model.items())))
-        self._start_conversion(rows)
-
     def action_convert_selected(self) -> None:
         rows = sorted({idx.row() for idx in self.table_view.selectionModel().selectedRows()})
         if not rows:
@@ -627,83 +555,41 @@ class MainWindow(QMainWindow):
     def _start_conversion(self, rows: list[int]) -> None:
         if not rows:
             return
-        options = self._current_options()
-        self._active_workers = 0
-        launched = 0
+        items = [self.model.item_at(row) for row in rows]
+        self.conversion_queue.enqueue([item for item in items if item is not None], self.conversion_options)
 
-        for row in rows:
-            item = self.model.item_at(row)
-            if item is None or item.status == ItemStatus.CONVERTING:
-                continue
-            worker = ConversionWorker(row, item, options)
-            worker.signals.started.connect(self._on_conversion_started)
-            worker.signals.finished.connect(self._on_conversion_finished)
-            worker.signals.failed.connect(self._on_conversion_failed)
-            self.thread_pool.start(worker)
-            launched += 1
+    def _refresh_preview_if_selected(self, item: QueueItem) -> None:
+        row = self.model.row_of(item)
+        if row >= 0 and self._selected_row() == row:
+            self._refresh_preview()
 
-        self._total_batch = launched
-        if launched == 0:
-            self.progress_bar.setVisible(False)
-            return
-        self.progress_bar.setMaximum(launched)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setVisible(True)
+    def _on_item_started(self, item: QueueItem) -> None:
+        self._refresh_preview_if_selected(item)
 
-    def _on_conversion_started(self, row: int) -> None:
-        item = self.model.item_at(row)
-        if item is not None:
-            item.status = ItemStatus.CONVERTING
-            self.model.refresh_row(row)
-            if self._selected_row() == row:
-                self._refresh_preview()
-
-    def _on_conversion_finished(self, row: int, markdown_text: str) -> None:
-        item = self.model.item_at(row)
-        if item is not None:
-            item.status = ItemStatus.DONE
-            item.markdown_result = markdown_text
-            item.error_message = ""
-            self._auto_save_to_downloads(item)
-            self.model.refresh_row(row)
-            if self._selected_row() < 0:
-                self.table_view.selectRow(row)
-            elif self._selected_row() == row:
-                self._refresh_preview()
-        self._advance_progress()
-
-    def _auto_save_to_downloads(self, item: QueueItem) -> None:
-        """Write a freshly converted item straight to Downloads (the whole
-        point of the app being "drop it and it's done" -- no manual export
-        step required)."""
-        try:
-            saved_path = auto_save_markdown(item, item.markdown_result or "")
-        except OSError as exc:
-            item.saved_path = ""
-            item.save_error = str(exc)
-            self.status_bar.showMessage(tr("status.autosave_failed", error=exc), 6000)
+    def _on_item_finished(self, item: QueueItem) -> None:
+        if self._selected_row() < 0:
+            self.table_view.selectRow(self.model.row_of(item))
         else:
-            item.saved_path = str(saved_path)
-            item.save_error = ""
-            self.status_bar.showMessage(tr("status.saved_to", path=saved_path), 5000)
+            self._refresh_preview_if_selected(item)
 
-    def _on_conversion_failed(self, row: int, message: str) -> None:
-        item = self.model.item_at(row)
-        if item is not None:
-            item.status = ItemStatus.ERROR
-            item.error_message = message
-            self.model.refresh_row(row)
-            if self._selected_row() == row:
-                self._refresh_preview()
-        self._advance_progress()
+    def _on_item_failed(self, item: QueueItem, message: str) -> None:
+        self._refresh_preview_if_selected(item)
         self.status_bar.showMessage(tr("status.conversion_failed", message=message), 5000)
 
-    def _advance_progress(self) -> None:
-        self._active_workers += 1
-        self.progress_bar.setValue(self._active_workers)
-        if self._active_workers >= self._total_batch:
-            self.status_bar.showMessage(tr("status.batch_complete"), 4000)
-            self.progress_bar.setVisible(False)
+    def _on_item_saved(self, item: QueueItem, path: str) -> None:
+        self.status_bar.showMessage(tr("status.saved_to", path=path), 5000)
+
+    def _on_item_save_failed(self, item: QueueItem, error: str) -> None:
+        self.status_bar.showMessage(tr("status.autosave_failed", error=error), 6000)
+
+    def _on_progress_changed(self, completed: int, total: int) -> None:
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(completed)
+        self.progress_bar.setVisible(True)
+
+    def _on_batch_finished(self) -> None:
+        self.status_bar.showMessage(tr("status.batch_complete"), 4000)
+        self.progress_bar.setVisible(False)
 
     def _selected_row(self) -> int:
         rows = self.table_view.selectionModel().selectedRows()
@@ -740,34 +626,17 @@ class MainWindow(QMainWindow):
             return
         self.preview_header.setVisible(True)
         self.preview_header_name.setText(item.display_name)
-        saved = bool(item.status == ItemStatus.DONE and item.saved_path)
-        failed = item.status == ItemStatus.ERROR or (item.status == ItemStatus.DONE and bool(item.save_error))
-        converting = item.status == ItemStatus.CONVERTING
-        if saved:
-            status = tr("status.done_saved")
-            kind = "saved"
-        elif item.status == ItemStatus.DONE and item.save_error:
-            status = tr("status.done_save_failed")
-            kind = "error"
-        elif item.status == ItemStatus.ERROR:
-            status = item.error_message or tr("preview.failed")
-            kind = "error"
-        elif converting:
-            status = tr("preview.converting")
-            kind = "converting"
-        elif item.status == ItemStatus.PENDING:
-            status = tr("preview.pending")
-            kind = "pending"
-        else:
-            status = tr(item.status.value)
-            kind = "pending"
-        self.preview_header_status.setText(status)
+        state = item.display_state
+        key, kind = _HEADER_STATUS[state]
+        message = item.error_message if state == DisplayState.ERROR else ""
+        self.preview_header_status.setText(message or tr(key))
         self.preview_header_status.setProperty("kind", kind)
         self.preview_header_status.style().unpolish(self.preview_header_status)
         self.preview_header_status.style().polish(self.preview_header_status)
+        saved = state == DisplayState.SAVED
         self.open_file_btn.setVisible(saved)
         self.reveal_btn.setVisible(saved)
-        self.retry_header_btn.setVisible(failed and not converting)
+        self.retry_header_btn.setVisible(state in (DisplayState.ERROR, DisplayState.SAVE_FAILED))
 
     def _show_preview_empty(self, title: str, hint: str) -> None:
         self.preview_empty_title.setText(title)
@@ -858,8 +727,16 @@ class MainWindow(QMainWindow):
         default_name = default_basename(item) + ".md"
         path, _ = QFileDialog.getSaveFileName(self, tr("dialog.save_copy_as"), default_name, tr("filter.markdown"))
         if path:
-            with open(path, "w", encoding="utf-8") as fh:
-                fh.write(item.markdown_result)
+            try:
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(item.markdown_result)
+            except OSError as exc:
+                QMessageBox.warning(
+                    self,
+                    tr("msgbox.save_copy_failed.title"),
+                    tr("msgbox.save_copy_failed.text", error=exc),
+                )
+                return
             self.status_bar.showMessage(tr("status.saved_copy_to", path=path), 4000)
 
     def action_export_all(self) -> None:
@@ -874,22 +751,16 @@ class MainWindow(QMainWindow):
             return
         self.settings.setValue("export/last_folder", folder)
 
-        used_names: set[str] = set()
-        written = 0
-        for item in converted:
-            base = sanitize_filename(default_basename(item))
-            name = base
-            counter = 1
-            while name in used_names:
-                name = f"{base}_{counter}"
-                counter += 1
-            used_names.add(name)
-            out_path = os.path.join(folder, f"{name}.md")
-            with open(out_path, "w", encoding="utf-8") as fh:
-                fh.write(item.markdown_result)
-            written += 1
-
-        self.status_bar.showMessage(tr("status.exported", count=written, folder=folder), 5000)
+        result = export_markdown(converted, folder)
+        if result.written:
+            self.status_bar.showMessage(tr("status.exported", count=len(result.written), folder=folder), 5000)
+        if result.failures:
+            details = "\n".join(f"{item.display_name}: {error}" for item, error in result.failures)
+            QMessageBox.warning(
+                self,
+                tr("msgbox.export_failed.title"),
+                tr("msgbox.export_failed.text", count=len(result.failures), details=details),
+            )
 
     def action_copy_raw(self) -> None:
         text = self.raw_view.toPlainText()
@@ -902,6 +773,8 @@ class MainWindow(QMainWindow):
         AboutDialog(self).exec()
 
     def _show_advanced_settings(self) -> None:
-        dialog = AdvancedSettingsDialog(self, self)
+        target_item = self.model.item_at(self._selected_row())
+        dialog = AdvancedSettingsDialog(self.conversion_options, target_item, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            dialog.apply_to_main_window()
+            self.conversion_options = dialog.selected_options()
+            dialog.apply_item_overrides()

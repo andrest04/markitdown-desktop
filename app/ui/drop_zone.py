@@ -1,7 +1,7 @@
 """Primary drop / browse / paste surface used by the main window."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -18,6 +18,25 @@ FORMAT_CHIPS = ("PDF", "Word", "Excel", "PPT", "Image", "Audio", "HTML", "ZIP", 
 
 EMPTY_HEIGHT = 320
 FILLED_HEIGHT = 96
+
+
+class _FileDropFilter(QObject):
+    """Forwards file drops on other panes to the drop zone that owns it."""
+
+    def __init__(self, drop_zone: DropZone):
+        super().__init__(drop_zone)
+        self._drop_zone = drop_zone
+
+    def eventFilter(self, watched, event):
+        event_type = event.type()
+        if event_type == QEvent.Type.DragEnter:
+            return self._drop_zone._begin_drag(event)
+        if event_type == QEvent.Type.DragLeave:
+            self._drop_zone.set_drag_active(False)
+        elif event_type == QEvent.Type.Drop:
+            self._drop_zone._finish_drop(event)
+            return True
+        return False
 
 
 class DropZone(QWidget):
@@ -124,6 +143,7 @@ class DropZone(QWidget):
         root.addStretch(1)
 
         self.setProperty("dragActive", False)
+        self._drop_filter = _FileDropFilter(self)
 
     def set_prominent(self, prominent: bool) -> None:
         """Switch between the big empty-queue look and a slim bar."""
@@ -155,6 +175,12 @@ class DropZone(QWidget):
     def retranslate(self) -> None:
         self.set_prominent(self._prominent)
 
+    def accept_drops_on(self, *widgets: QWidget) -> None:
+        """Treat a file drop on any of `widgets` as a drop on this zone."""
+        for widget in widgets:
+            widget.setAcceptDrops(True)
+            widget.installEventFilter(self._drop_filter)
+
     def set_drag_active(self, active: bool) -> None:
         self.setProperty("dragActive", active)
         self.style().unpolish(self)
@@ -172,17 +198,27 @@ class DropZone(QWidget):
         if self._on_url is not None:
             self._on_url()
 
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-            self.set_drag_active(True)
+    def _begin_drag(self, event) -> bool:
+        """Accept a drag that carries URLs; returns whether it was accepted."""
+        mime = event.mimeData()
+        if mime is None or not mime.hasUrls():
+            return False
+        event.acceptProposedAction()
+        self.set_drag_active(True)
+        return True
 
-    def dragLeaveEvent(self, event):
-        self.set_drag_active(False)
-
-    def dropEvent(self, event):
+    def _finish_drop(self, event) -> None:
         self.set_drag_active(False)
         paths = [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
         if paths:
             self._on_paths_dropped(paths)
         event.acceptProposedAction()
+
+    def dragEnterEvent(self, event):
+        self._begin_drag(event)
+
+    def dragLeaveEvent(self, event):
+        self.set_drag_active(False)
+
+    def dropEvent(self, event):
+        self._finish_drop(event)

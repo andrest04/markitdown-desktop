@@ -1,6 +1,7 @@
 """Queue data model backing the conversion table view."""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -21,17 +22,47 @@ class ItemStatus(Enum):
     ERROR = "status.error"
 
 
+class DisplayState(Enum):
+    """What an item means to the user, derived from status + save outcome.
+
+    Values are translation KEYS, for the same reason as ItemStatus. Read it
+    through `QueueItem.display_state`; never store it.
+    """
+
+    PENDING = "status.pending"
+    CONVERTING = "status.converting"
+    DONE = "status.done"
+    SAVED = "status.done_saved"
+    SAVE_FAILED = "status.done_save_failed"
+    ERROR = "status.error"
+
+
 class SourceKind(Enum):
     FILE = "File"
     URL = "URL"
 
 
-@dataclass
+def detect_type_label(source: str, kind: SourceKind) -> str:
+    """Best-effort, cheap type label for the queue table (no conversion)."""
+    if kind == SourceKind.URL:
+        lowered = source.lower()
+        if "youtube.com" in lowered or "youtu.be" in lowered:
+            return "YouTube"
+        return "type.webpage"
+    ext = os.path.splitext(source)[1].lower()
+    return ext.lstrip(".").upper() if ext else "type.file"
+
+
+@dataclass(eq=False)
 class QueueItem:
     """A single entry in the conversion queue.
 
     For FILE items, `source` is an absolute local path.
     For URL items, `source` is the raw URL string.
+
+    Compared and hashed by identity (`eq=False`): each entry is its own
+    object, which is what lets workers and `row_of()` find it after the
+    rows around it have changed.
     """
 
     source: str
@@ -49,8 +80,63 @@ class QueueItem:
     saved_path: str = ""
     save_error: str = ""
 
+    @classmethod
+    def from_path(cls, path: str) -> QueueItem:
+        abs_path = os.path.abspath(path)
+        return cls(
+            source=abs_path,
+            kind=SourceKind.FILE,
+            display_name=os.path.basename(abs_path),
+            detected_type=detect_type_label(abs_path, SourceKind.FILE),
+        )
+
+    @classmethod
+    def from_url(cls, url: str) -> QueueItem:
+        return cls(
+            source=url,
+            kind=SourceKind.URL,
+            display_name=url,
+            detected_type=detect_type_label(url, SourceKind.URL),
+        )
+
     def display_source(self) -> str:
         return self.display_name
+
+    @property
+    def display_state(self) -> DisplayState:
+        if self.status == ItemStatus.PENDING:
+            return DisplayState.PENDING
+        if self.status == ItemStatus.CONVERTING:
+            return DisplayState.CONVERTING
+        if self.status == ItemStatus.ERROR:
+            return DisplayState.ERROR
+        if self.saved_path:
+            return DisplayState.SAVED
+        if self.save_error:
+            return DisplayState.SAVE_FAILED
+        return DisplayState.DONE
+
+    def mark_converting(self) -> None:
+        self.status = ItemStatus.CONVERTING
+
+    def mark_converted(self, markdown_text: str) -> None:
+        self.status = ItemStatus.DONE
+        self.markdown_result = markdown_text
+        self.error_message = ""
+
+    def mark_failed(self, message: str) -> None:
+        """A failed retry keeps `saved_path`: the earlier file still exists."""
+        self.status = ItemStatus.ERROR
+        self.error_message = message
+
+    def mark_saved(self, path: str) -> None:
+        self.saved_path = str(path)
+        self.save_error = ""
+
+    def mark_save_failed(self, error: str) -> None:
+        """The conversion itself succeeded, so the status stays DONE."""
+        self.saved_path = ""
+        self.save_error = str(error)
 
 
 COLUMN_NAME = 0
@@ -98,20 +184,19 @@ class QueueTableModel(QAbstractTableModel):
             if col == COLUMN_TYPE:
                 return tr(item.detected_type) if item.detected_type else "?"
             if col == COLUMN_STATUS:
-                if item.status == ItemStatus.DONE and item.saved_path:
-                    return tr("status.done_saved")
-                if item.status == ItemStatus.DONE and item.save_error:
-                    return tr("status.done_save_failed")
-                return tr(item.status.value)
+                return tr(item.display_state.value)
             return None
 
         if role == Qt.ItemDataRole.ToolTipRole:
-            if col == COLUMN_STATUS and item.status == ItemStatus.ERROR:
-                return item.error_message
-            if col == COLUMN_STATUS and item.status == ItemStatus.DONE and item.saved_path:
-                return tr("tooltip.saved_to", path=item.saved_path)
-            if col == COLUMN_STATUS and item.status == ItemStatus.DONE and item.save_error:
-                return tr("tooltip.save_failed", error=item.save_error)
+            if col == COLUMN_STATUS:
+                state = item.display_state
+                if state == DisplayState.ERROR:
+                    return item.error_message
+                if state == DisplayState.SAVED:
+                    return tr("tooltip.saved_to", path=item.saved_path)
+                if state == DisplayState.SAVE_FAILED:
+                    return tr("tooltip.save_failed", error=item.save_error)
+                return None
             if col == COLUMN_NAME:
                 return item.source
             return None
@@ -127,11 +212,13 @@ class QueueTableModel(QAbstractTableModel):
             return self._items[row]
         return None
 
-    def add_item(self, item: QueueItem) -> None:
+    def add_item(self, item: QueueItem) -> int:
+        """Append `item` and return its row."""
         row = len(self._items)
         self.beginInsertRows(QModelIndex(), row, row)
         self._items.append(item)
         self.endInsertRows()
+        return row
 
     def remove_rows(self, rows: list[int]) -> None:
         for row in sorted(set(rows), reverse=True):
