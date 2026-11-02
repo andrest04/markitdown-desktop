@@ -173,6 +173,7 @@ class DropZone(QWidget):
         self._hint.setText(tr("dropzone.saves_to"))
         self._url_label.setText(tr("dropzone.url_label"))
         self._formats.setText(tr("dropzone.formats"))
+        self.url_edit.setAccessibleName(tr("dropzone.url_label"))
         self.url_edit.setPlaceholderText(tr("url.placeholder" if self._prominent else "url.placeholder.filled"))
         self.add_url_btn.setText(tr("button.add_url"))
         self.browse_btn.setText(tr("button.add_files"))

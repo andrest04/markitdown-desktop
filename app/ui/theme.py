@@ -194,6 +194,8 @@ QPushButton:disabled {{
 QPushButton[tier="primary"], QDialogButtonBox QPushButton:default {{
     background-color: {t.ink};
     color: {t.primary_fg};
+}}
+QPushButton[tier="primary"] {{
     font-weight: 600;
 }}
 QPushButton[tier="primary"]:hover, QDialogButtonBox QPushButton:default:hover {{
@@ -238,13 +240,13 @@ QLineEdit {{
     background-color: {t.paper};
     border: 1px solid {t.edge};
     border-radius: 4px;
-    padding: 5px 8px;
+    padding: 4px 8px;
     selection-background-color: {t.mark};
     selection-color: {t.on_mark};
 }}
 QLineEdit:focus {{
     border: 2px solid {t.ink};
-    padding: 4px 7px;
+    padding: 3px 7px;
 }}
 QLineEdit:disabled {{
     background-color: {t.desk};
@@ -286,7 +288,7 @@ QTabBar::tab {{
     color: {t.muted};
     padding: 6px 6px;
     margin-right: 10px;
-    border-bottom: 2px solid transparent;
+    border: 2px solid transparent;
 }}
 QTabBar::tab:hover {{
     color: {t.ink};
@@ -297,7 +299,7 @@ QTabBar::tab:selected {{
     border-bottom: 2px solid {t.ink};
 }}
 QTabBar::tab:focus {{
-    background: {t.wash};
+    border: 2px solid {t.ink};
 }}
 
 QProgressBar {{
@@ -363,6 +365,20 @@ QCheckBox {{
 QCheckBox:focus {{
     border-color: {t.ink};
     outline: none;
+}}
+QCheckBox::indicator {{
+    width: 12px;
+    height: 12px;
+    border: 1px solid {t.edge};
+    border-radius: 2px;
+    background: {t.paper};
+}}
+QCheckBox::indicator:hover {{
+    border-color: {t.ink};
+}}
+QCheckBox::indicator:checked {{
+    border-color: {t.ink};
+    background: {t.ink};
 }}
 
 QSplitter::handle {{

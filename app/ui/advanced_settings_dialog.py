@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -36,7 +37,7 @@ class AdvancedSettingsDialog(QDialog):
         self._options = options
         self._target_item = target_item
         self.setWindowTitle(tr("advanced.title"))
-        self.setMinimumWidth(480)
+        self.setMinimumWidth(520)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(22, 18, 22, 16)
@@ -68,10 +69,13 @@ class AdvancedSettingsDialog(QDialog):
         self.cu_analyzer_edit.setPlaceholderText(tr("advanced.cu_analyzer_placeholder"))
         layout.addWidget(self.cu_analyzer_edit)
 
+        layout.addSpacing(10)
         layout.addWidget(QLabel(tr("advanced.per_item_hints")))
         item = target_item
         if item is None:
-            layout.addWidget(QLabel(tr("advanced.select_row_first")))
+            select_first = QLabel(tr("advanced.select_row_first"))
+            select_first.setWordWrap(True)
+            layout.addWidget(select_first)
             self.extension_override_edit = QLineEdit()
             self.mimetype_override_edit = QLineEdit()
             self.charset_override_edit = QLineEdit()
@@ -90,11 +94,20 @@ class AdvancedSettingsDialog(QDialog):
         override_row.addWidget(self.mimetype_override_edit)
         override_row.addWidget(self.charset_override_edit)
         layout.addLayout(override_row)
+        layout.addSpacing(10)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("advanced.save"))
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(tr("button.cancel"))
+        for button in buttons.buttons():
+            button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+        # No ring on open: focus lands on a control once the keyboard moves it.
+        self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self.setFocus()
 
     def selected_options(self) -> ConversionOptions:
         """The options as edited, as a new value; the input is left untouched."""

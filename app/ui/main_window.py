@@ -88,6 +88,7 @@ _LIST_WIDTH = 340
 # With the view's 2px focus border this lines the text up with the pane header.
 _SHEET_MARGIN = 22
 _PANE_MARGIN = 24
+_PROGRESS_HEIGHT = 2
 
 
 def _brief_error(message: str) -> str:
@@ -159,17 +160,6 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setValue(0)
-        self.progress_bar.setTextVisible(False)
-        self.progress_bar.setFixedHeight(2)
-        # Keeps its strip when hidden, so a batch starting never shifts the panes.
-        policy = self.progress_bar.sizePolicy()
-        policy.setRetainSizeWhenHidden(True)
-        self.progress_bar.setSizePolicy(policy)
-        self.progress_bar.setVisible(False)
-        root.addWidget(self.progress_bar)
-
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.setHandleWidth(1)
         self.splitter.setChildrenCollapsible(False)
@@ -186,6 +176,12 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.status_bar.setSizeGripEnabled(False)
         self.setStatusBar(self.status_bar)
+
+        # Floats over the panes, so a batch starting never shifts the layout.
+        self.progress_bar = QProgressBar(central)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setVisible(False)
 
         self.drag_overlay = QLabel(tr("overlay.drop"), central)
         self.drag_overlay.setObjectName("DragOverlay")
@@ -215,6 +211,7 @@ class MainWindow(QMainWindow):
         if event.type() == QEvent.Type.Resize:
             if watched is self.centralWidget():
                 self.drag_overlay.setGeometry(watched.rect())
+                self.progress_bar.setGeometry(0, 0, watched.width(), _PROGRESS_HEIGHT)
             elif watched is self.preview_panel:
                 self._fit_preview_title()
             elif watched is self.rendered_view.viewport():
@@ -247,6 +244,7 @@ class MainWindow(QMainWindow):
 
         self.table_view = QTableView()
         self.table_view.setObjectName("QueueView")
+        self.table_view.setAccessibleName(tr("a11y.queue"))
         self.table_view.setModel(self.model)
         self.table_view.setShowGrid(False)
         self.table_view.setAlternatingRowColors(False)
@@ -360,7 +358,7 @@ class MainWindow(QMainWindow):
 
         self.preview_empty = QWidget()
         empty_layout = QVBoxLayout(self.preview_empty)
-        empty_layout.setContentsMargins(_PANE_MARGIN, 8, _PANE_MARGIN, _PANE_MARGIN)
+        empty_layout.setContentsMargins(_PANE_MARGIN, 16, _PANE_MARGIN, _PANE_MARGIN)
         empty_layout.setSpacing(4)
         self.preview_empty_title = QLabel()
         self.preview_empty_title.setObjectName("PreviewEmptyTitle")
@@ -378,6 +376,7 @@ class MainWindow(QMainWindow):
         body_layout.setSpacing(0)
 
         self.tabs = QTabWidget()
+        self.tabs.tabBar().setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.rendered_view = QTextBrowser()
         self.rendered_view.setOpenExternalLinks(True)
         self.rendered_view.document().setDocumentMargin(_SHEET_MARGIN)
@@ -552,6 +551,7 @@ class MainWindow(QMainWindow):
         self.retry_header_btn.setText(tr("menu.retry"))
         self.more_btn.setText(tr("button.more"))
         self.drag_overlay.setText(tr("overlay.drop"))
+        self.table_view.setAccessibleName(tr("a11y.queue"))
 
         self.tabs.setTabText(0, tr("tab.rendered"))
         self.tabs.setTabText(1, tr("tab.raw"))
@@ -699,6 +699,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setMaximum(total)
         self.progress_bar.setValue(completed)
         self.progress_bar.setVisible(True)
+        self.progress_bar.raise_()
 
     def _on_batch_finished(self) -> None:
         self.status_bar.showMessage(tr("status.batch_complete"), 4000)
