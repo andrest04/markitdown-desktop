@@ -41,11 +41,9 @@ from PySide6.QtWidgets import (
 from app.core.conversion_queue import ConversionQueue
 from app.core.converter import (
     ConversionOptions,
+    classify_paths,
     default_basename,
-    detect_type_label,
-    is_supported_file,
-    iter_supported_files,
-    sanitize_filename,
+    export_markdown,
     supported_name_filter,
 )
 from app.core.queue_model import (
@@ -55,7 +53,6 @@ from app.core.queue_model import (
     ItemStatus,
     QueueItem,
     QueueTableModel,
-    SourceKind,
 )
 from app.i18n import LANG_EN, LANG_ES, tr
 from app.i18n import manager as i18n_manager
@@ -530,51 +527,34 @@ class MainWindow(QMainWindow):
             self._add_paths([folder])
 
     def _add_paths(self, paths: list[str]) -> None:
-        added_rows: list[int] = []
-        skipped = 0
-        saw_folder = False
-        for path in paths:
-            if os.path.isdir(path):
-                saw_folder = True
-                for file_path in iter_supported_files(path):
-                    row = self._add_single_file(file_path)
-                    if row is not None:
-                        added_rows.append(row)
-            elif os.path.isfile(path):
-                if not is_supported_file(path):
-                    skipped += 1
-                    continue
-                row = self._add_single_file(path)
-                if row is not None:
-                    added_rows.append(row)
-        if added_rows:
-            message = tr("status.added_files", count=len(added_rows))
-            if skipped:
-                message = f"{message} {tr('status.skipped_unsupported', count=skipped)}"
+        classified = classify_paths(paths)
+        new_items: list[QueueItem] = []
+        new_sources: set[str] = set()
+        for file_path in classified.files:
+            item = QueueItem.from_path(file_path)
+            if item.source not in new_sources and not self.model.source_exists(item.source):
+                new_sources.add(item.source)
+                new_items.append(item)
+        if new_items:
+            message = tr("status.added_files", count=len(new_items))
+            if classified.skipped:
+                message = f"{message} {tr('status.skipped_unsupported', count=classified.skipped)}"
             self.status_bar.showMessage(message, 4000)
-            if self._selected_row() < 0:
-                self.table_view.selectRow(added_rows[0])
-            self._start_conversion(added_rows)
+            self._enqueue_and_start(new_items)
             return
-        if skipped or saw_folder:
+        if classified.skipped or classified.saw_folder:
             QMessageBox.information(
                 self,
                 tr("msgbox.unsupported.title"),
                 tr("msgbox.unsupported.text"),
             )
 
-    def _add_single_file(self, path: str) -> int | None:
-        abs_path = os.path.abspath(path)
-        if self.model.source_exists(abs_path):
-            return None
-        item = QueueItem(
-            source=abs_path,
-            kind=SourceKind.FILE,
-            display_name=os.path.basename(abs_path),
-            detected_type=detect_type_label(abs_path, SourceKind.FILE),
-        )
-        self.model.add_item(item)
-        return len(self.model.items()) - 1
+    def _enqueue_and_start(self, items: list[QueueItem]) -> None:
+        """Add new items to the queue and start converting them right away."""
+        rows = [self.model.add_item(item) for item in items]
+        if self._selected_row() < 0:
+            self.table_view.selectRow(rows[0])
+        self.conversion_queue.enqueue(items, self.conversion_options)
 
     def action_add_url(self) -> None:
         url = self.url_edit.text().strip()
@@ -586,18 +566,8 @@ class MainWindow(QMainWindow):
         if self.model.source_exists(url):
             self.status_bar.showMessage(tr("status.url_already_queued"), 3000)
             return
-        item = QueueItem(
-            source=url,
-            kind=SourceKind.URL,
-            display_name=url,
-            detected_type=detect_type_label(url, SourceKind.URL),
-        )
-        self.model.add_item(item)
         self.url_edit.clear()
-        row = len(self.model.items()) - 1
-        if self._selected_row() < 0:
-            self.table_view.selectRow(row)
-        self._start_conversion([row])
+        self._enqueue_and_start([QueueItem.from_url(url)])
 
     def action_remove_selected(self) -> None:
         rows = sorted({idx.row() for idx in self.table_view.selectionModel().selectedRows()})
@@ -797,8 +767,16 @@ class MainWindow(QMainWindow):
         default_name = default_basename(item) + ".md"
         path, _ = QFileDialog.getSaveFileName(self, tr("dialog.save_copy_as"), default_name, tr("filter.markdown"))
         if path:
-            with open(path, "w", encoding="utf-8") as fh:
-                fh.write(item.markdown_result)
+            try:
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(item.markdown_result)
+            except OSError as exc:
+                QMessageBox.warning(
+                    self,
+                    tr("msgbox.save_copy_failed.title"),
+                    tr("msgbox.save_copy_failed.text", error=exc),
+                )
+                return
             self.status_bar.showMessage(tr("status.saved_copy_to", path=path), 4000)
 
     def action_export_all(self) -> None:
@@ -813,22 +791,16 @@ class MainWindow(QMainWindow):
             return
         self.settings.setValue("export/last_folder", folder)
 
-        used_names: set[str] = set()
-        written = 0
-        for item in converted:
-            base = sanitize_filename(default_basename(item))
-            name = base
-            counter = 1
-            while name in used_names:
-                name = f"{base}_{counter}"
-                counter += 1
-            used_names.add(name)
-            out_path = os.path.join(folder, f"{name}.md")
-            with open(out_path, "w", encoding="utf-8") as fh:
-                fh.write(item.markdown_result)
-            written += 1
-
-        self.status_bar.showMessage(tr("status.exported", count=written, folder=folder), 5000)
+        result = export_markdown(converted, folder)
+        if result.written:
+            self.status_bar.showMessage(tr("status.exported", count=len(result.written), folder=folder), 5000)
+        if result.failures:
+            details = "\n".join(f"{item.display_name}: {error}" for item, error in result.failures)
+            QMessageBox.warning(
+                self,
+                tr("msgbox.export_failed.title"),
+                tr("msgbox.export_failed.text", count=len(result.failures), details=details),
+            )
 
     def action_copy_raw(self) -> None:
         text = self.raw_view.toPlainText()

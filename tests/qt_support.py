@@ -18,7 +18,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from PySide6.QtCore import QThreadPool
+from PySide6.QtCore import QEvent, QThreadPool
 from PySide6.QtWidgets import QApplication
 
 from app.i18n import LANG_EN, SETTINGS_KEY
@@ -180,6 +180,9 @@ class WindowTestCase(QtTestCase):
         settle()
         self.window.close()
         self.window.deleteLater()
+        # processEvents() alone never runs deferred deletes; leftover windows
+        # would slow every later global stylesheet change.
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
         process_events()
 
     def add_sources(self, *names: str) -> list[str]:

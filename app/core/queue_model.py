@@ -1,6 +1,7 @@
 """Queue data model backing the conversion table view."""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -41,6 +42,17 @@ class SourceKind(Enum):
     URL = "URL"
 
 
+def detect_type_label(source: str, kind: SourceKind) -> str:
+    """Best-effort, cheap type label for the queue table (no conversion)."""
+    if kind == SourceKind.URL:
+        lowered = source.lower()
+        if "youtube.com" in lowered or "youtu.be" in lowered:
+            return "YouTube"
+        return "type.webpage"
+    ext = os.path.splitext(source)[1].lower()
+    return ext.lstrip(".").upper() if ext else "type.file"
+
+
 @dataclass(eq=False)
 class QueueItem:
     """A single entry in the conversion queue.
@@ -67,6 +79,25 @@ class QueueItem:
     # Result of the automatic save-to-Downloads step (set after conversion).
     saved_path: str = ""
     save_error: str = ""
+
+    @classmethod
+    def from_path(cls, path: str) -> QueueItem:
+        abs_path = os.path.abspath(path)
+        return cls(
+            source=abs_path,
+            kind=SourceKind.FILE,
+            display_name=os.path.basename(abs_path),
+            detected_type=detect_type_label(abs_path, SourceKind.FILE),
+        )
+
+    @classmethod
+    def from_url(cls, url: str) -> QueueItem:
+        return cls(
+            source=url,
+            kind=SourceKind.URL,
+            display_name=url,
+            detected_type=detect_type_label(url, SourceKind.URL),
+        )
 
     def display_source(self) -> str:
         return self.display_name
@@ -181,11 +212,13 @@ class QueueTableModel(QAbstractTableModel):
             return self._items[row]
         return None
 
-    def add_item(self, item: QueueItem) -> None:
+    def add_item(self, item: QueueItem) -> int:
+        """Append `item` and return its row."""
         row = len(self._items)
         self.beginInsertRows(QModelIndex(), row, row)
         self._items.append(item)
         self.endInsertRows()
+        return row
 
     def remove_rows(self, rows: list[int]) -> None:
         for row in sorted(set(rows), reverse=True):

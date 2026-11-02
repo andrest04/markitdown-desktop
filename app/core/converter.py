@@ -35,7 +35,7 @@ from __future__ import annotations
 import os
 import re
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from pathlib import Path
@@ -126,6 +126,34 @@ def auto_save_markdown(item: QueueItem, markdown_text: str, downloads_dir: Path 
     path.write_text(markdown_text, encoding="utf-8")
     return path
 
+
+@dataclass
+class ExportResult:
+    """What `export_markdown` wrote, and which items failed with which error."""
+
+    written: list[Path] = field(default_factory=list)
+    failures: list[tuple[QueueItem, str]] = field(default_factory=list)
+
+
+def export_markdown(items: list[QueueItem], folder: str | Path) -> ExportResult:
+    """Write each item's markdown into `folder`, never overwriting a file.
+
+    A failed item is recorded in the result and the rest still run, so
+    OSError never reaches the caller.
+    """
+    directory = Path(folder)
+    result = ExportResult()
+    for item in items:
+        try:
+            path = unique_download_path(directory, sanitize_filename(default_basename(item)))
+            path.write_text(item.markdown_result or "", encoding="utf-8")
+        except OSError as exc:
+            result.failures.append((item, str(exc)))
+        else:
+            result.written.append(path)
+    return result
+
+
 # Extensions markitdown's built-in converters recognize (used to filter
 # recursive folder scans). PlainTextConverter/HtmlConverter also catch many
 # text/* and application/*+xml mimetypes generically, but for a folder scan
@@ -209,17 +237,6 @@ def convert_item(item: QueueItem, options: ConversionOptions) -> str:
     return result.text_content
 
 
-def detect_type_label(source: str, kind: SourceKind) -> str:
-    """Best-effort, cheap type label for the queue table (no conversion)."""
-    if kind == SourceKind.URL:
-        lowered = source.lower()
-        if "youtube.com" in lowered or "youtu.be" in lowered:
-            return "YouTube"
-        return "type.webpage"
-    ext = os.path.splitext(source)[1].lower()
-    return ext.lstrip(".").upper() if ext else "type.file"
-
-
 def iter_supported_files(folder: str):
     """Recursively yield file paths under `folder` matching SUPPORTED_EXTENSIONS."""
     for root, _dirs, files in os.walk(folder):
@@ -227,6 +244,36 @@ def iter_supported_files(folder: str):
             ext = os.path.splitext(name)[1].lower()
             if ext in SUPPORTED_EXTENSIONS:
                 yield os.path.join(root, name)
+
+
+@dataclass(frozen=True)
+class ClassifiedPaths:
+    """Dropped or browsed paths, sorted out for queueing."""
+
+    files: list[str]
+    skipped: int  # explicitly given files with an unsupported extension
+    saw_folder: bool
+
+
+def classify_paths(paths: list[str]) -> ClassifiedPaths:
+    """Expand folders and filter by extension, keeping the given order.
+
+    Unsupported files inside a folder are not counted as skipped; only files
+    the user pointed at directly are. Paths that do not exist are ignored.
+    """
+    files: list[str] = []
+    skipped = 0
+    saw_folder = False
+    for path in paths:
+        if os.path.isdir(path):
+            saw_folder = True
+            files.extend(iter_supported_files(path))
+        elif os.path.isfile(path):
+            if is_supported_file(path):
+                files.append(path)
+            else:
+                skipped += 1
+    return ClassifiedPaths(files, skipped, saw_folder)
 
 
 class WorkerSignals(QObject):
