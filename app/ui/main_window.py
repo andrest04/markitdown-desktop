@@ -7,7 +7,7 @@ import sys
 import webbrowser
 
 import markdown as markdown_lib
-from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QThreadPool, QUrl
+from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QUrl
 from PySide6.QtGui import (
     QAction,
     QDesktopServices,
@@ -38,10 +38,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.conversion_queue import ConversionQueue
 from app.core.converter import (
     ConversionOptions,
-    ConversionWorker,
-    auto_save_markdown,
     default_basename,
     detect_type_label,
     is_supported_file,
@@ -128,12 +127,6 @@ class MainWindow(QMainWindow):
         self.resize(1180, 780)
         self.setMinimumSize(880, 600)
 
-        self.thread_pool = QThreadPool.globalInstance()
-        self._completed_count = 0
-        self._total_count = 0
-        # Dispatched but not yet finished. Status only changes once a worker
-        # actually starts, so it cannot guard against double dispatch.
-        self._in_flight: set[QueueItem] = set()
         self._preview_item: QueueItem | None = None
 
         self.enable_plugins = False
@@ -145,6 +138,14 @@ class MainWindow(QMainWindow):
         self.cu_analyzer_id = ""
 
         self.model = QueueTableModel(self)
+        self.conversion_queue = ConversionQueue(self.model, parent=self)
+        self.conversion_queue.item_started.connect(self._on_item_started)
+        self.conversion_queue.item_finished.connect(self._on_item_finished)
+        self.conversion_queue.item_failed.connect(self._on_item_failed)
+        self.conversion_queue.item_saved.connect(self._on_item_saved)
+        self.conversion_queue.item_save_failed.connect(self._on_item_save_failed)
+        self.conversion_queue.progress_changed.connect(self._on_progress_changed)
+        self.conversion_queue.batch_finished.connect(self._on_batch_finished)
 
         self._build_ui()
         self._build_menu()
@@ -642,78 +643,40 @@ class MainWindow(QMainWindow):
         if not rows:
             return
         items = [self.model.item_at(row) for row in rows]
-        to_start = [item for item in items if item is not None and item not in self._in_flight]
-        if not to_start:
-            return
+        self.conversion_queue.enqueue([item for item in items if item is not None], self._current_options())
 
-        if not self._in_flight:
-            self._completed_count = 0
-            self._total_count = 0
-        self._total_count += len(to_start)
-
-        options = self._current_options()
-        for item in to_start:
-            self._in_flight.add(item)
-            worker = ConversionWorker(item, options)
-            worker.signals.started.connect(self._on_conversion_started)
-            worker.signals.finished.connect(self._on_conversion_finished)
-            worker.signals.failed.connect(self._on_conversion_failed)
-            self.thread_pool.start(worker)
-
-        self.progress_bar.setMaximum(self._total_count)
-        self.progress_bar.setValue(self._completed_count)
-        self.progress_bar.setVisible(True)
-
-    def _on_conversion_started(self, item: QueueItem) -> None:
+    def _refresh_preview_if_selected(self, item: QueueItem) -> None:
         row = self.model.row_of(item)
-        if row >= 0:
-            item.mark_converting()
-            self.model.refresh_row(row)
-            if self._selected_row() == row:
-                self._refresh_preview()
+        if row >= 0 and self._selected_row() == row:
+            self._refresh_preview()
 
-    def _on_conversion_finished(self, item: QueueItem, markdown_text: str) -> None:
-        row = self.model.row_of(item)
-        if row >= 0:
-            item.mark_converted(markdown_text)
-            self._auto_save_to_downloads(item)
-            self.model.refresh_row(row)
-            if self._selected_row() < 0:
-                self.table_view.selectRow(row)
-            elif self._selected_row() == row:
-                self._refresh_preview()
-        self._advance_progress(item)
+    def _on_item_started(self, item: QueueItem) -> None:
+        self._refresh_preview_if_selected(item)
 
-    def _auto_save_to_downloads(self, item: QueueItem) -> None:
-        """Write a freshly converted item straight to Downloads (the whole
-        point of the app being "drop it and it's done" -- no manual export
-        step required)."""
-        try:
-            saved_path = auto_save_markdown(item, item.markdown_result or "")
-        except OSError as exc:
-            item.mark_save_failed(str(exc))
-            self.status_bar.showMessage(tr("status.autosave_failed", error=exc), 6000)
+    def _on_item_finished(self, item: QueueItem) -> None:
+        if self._selected_row() < 0:
+            self.table_view.selectRow(self.model.row_of(item))
         else:
-            item.mark_saved(str(saved_path))
-            self.status_bar.showMessage(tr("status.saved_to", path=saved_path), 5000)
+            self._refresh_preview_if_selected(item)
 
-    def _on_conversion_failed(self, item: QueueItem, message: str) -> None:
-        row = self.model.row_of(item)
-        if row >= 0:
-            item.mark_failed(message)
-            self.model.refresh_row(row)
-            if self._selected_row() == row:
-                self._refresh_preview()
-        self._advance_progress(item)
+    def _on_item_failed(self, item: QueueItem, message: str) -> None:
+        self._refresh_preview_if_selected(item)
         self.status_bar.showMessage(tr("status.conversion_failed", message=message), 5000)
 
-    def _advance_progress(self, item: QueueItem) -> None:
-        self._in_flight.discard(item)
-        self._completed_count += 1
-        self.progress_bar.setValue(self._completed_count)
-        if not self._in_flight:
-            self.status_bar.showMessage(tr("status.batch_complete"), 4000)
-            self.progress_bar.setVisible(False)
+    def _on_item_saved(self, item: QueueItem, path: str) -> None:
+        self.status_bar.showMessage(tr("status.saved_to", path=path), 5000)
+
+    def _on_item_save_failed(self, item: QueueItem, error: str) -> None:
+        self.status_bar.showMessage(tr("status.autosave_failed", error=error), 6000)
+
+    def _on_progress_changed(self, completed: int, total: int) -> None:
+        self.progress_bar.setMaximum(total)
+        self.progress_bar.setValue(completed)
+        self.progress_bar.setVisible(True)
+
+    def _on_batch_finished(self) -> None:
+        self.status_bar.showMessage(tr("status.batch_complete"), 4000)
+        self.progress_bar.setVisible(False)
 
     def _selected_row(self) -> int:
         rows = self.table_view.selectionModel().selectedRows()

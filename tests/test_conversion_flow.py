@@ -109,6 +109,30 @@ class OverlappingBatchTests(WindowTestCase):
         self.add_sources("c.txt")
         self.assertEqual(self.progress_state(), (0, 1, True))
 
+    def test_status_bar_shows_saved_path_then_batch_complete(self):
+        self.add_sources("a.txt")
+        self.converter.release_all()
+        settle()
+        self.assertEqual(self.window.status_bar.currentMessage(), tr("status.batch_complete"))
+
+    def test_failure_message_outlives_batch_complete(self):
+        self.converter.failures["a.txt"] = "boom"
+        self.add_sources("a.txt")
+        self.converter.release_all()
+        settle()
+        self.assertEqual(
+            self.window.status_bar.currentMessage(),
+            tr("status.conversion_failed", message="boom"),
+        )
+
+    def test_first_finished_item_is_selected_when_nothing_is(self):
+        self.add_sources("a.txt")
+        self.window.table_view.clearSelection()
+        self.converter.release_all()
+        settle()
+        self.assertEqual(self.window._selected_row(), 0)
+        self.assertEqual(self.window.raw_view.toPlainText(), "# converted a.txt")
+
     def test_retry_with_nothing_to_start_keeps_the_running_bar(self):
         self.add_sources("a.txt", "b.txt")
         self.wait_started(2)
