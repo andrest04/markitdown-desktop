@@ -428,7 +428,7 @@ QToolTip {{
     background: transparent;
     color: {t.muted};
     font-size: 12px;
-    padding-left: 12px;
+    padding-left: 9px;
 }}
 #DropZone[prominent="false"] {{
     background: {t.desk};
