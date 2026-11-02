@@ -7,7 +7,7 @@ import sys
 import webbrowser
 
 import markdown as markdown_lib
-from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QUrl
+from PySide6.QtCore import QSettings, Qt, QUrl
 from PySide6.QtGui import (
     QAction,
     QDesktopServices,
@@ -84,35 +84,6 @@ def detect_system_theme() -> str:
     return "dark" if luminance < 128 else "light"
 
 
-class _FileDropFilter(QObject):
-    """Accept file drops on panes that are not the drop zone itself."""
-
-    def __init__(self, on_paths, set_active, parent=None):
-        super().__init__(parent)
-        self._on_paths = on_paths
-        self._set_active = set_active
-
-    def eventFilter(self, watched, event):
-        et = event.type()
-        if et == QEvent.Type.DragEnter:
-            mime = event.mimeData()
-            if mime is not None and mime.hasUrls():
-                event.acceptProposedAction()
-                self._set_active(True)
-                return True
-        elif et == QEvent.Type.DragLeave:
-            self._set_active(False)
-        elif et == QEvent.Type.Drop:
-            self._set_active(False)
-            mime = event.mimeData()
-            paths = [url.toLocalFile() for url in mime.urls() if url.isLocalFile()]
-            if paths:
-                self._on_paths(paths)
-            event.acceptProposedAction()
-            return True
-        return False
-
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -174,14 +145,7 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
 
-        self._drop_filter = _FileDropFilter(
-            self._add_paths,
-            lambda active: self.drop_zone.set_drag_active(active),
-            self,
-        )
-        for widget in (self.left_panel, self.preview_panel, self.table_view.viewport()):
-            widget.setAcceptDrops(True)
-            widget.installEventFilter(self._drop_filter)
+        self.drop_zone.accept_drops_on(self.left_panel, self.preview_panel, self.table_view.viewport())
 
     def _build_left_panel(self) -> QWidget:
         panel = QWidget()
@@ -580,10 +544,6 @@ class MainWindow(QMainWindow):
         self.raw_view.clear()
         self.rendered_view.clear()
         self._refresh_preview()
-
-    def action_convert_all(self) -> None:
-        rows = list(range(len(self.model.items())))
-        self._start_conversion(rows)
 
     def action_convert_selected(self) -> None:
         rows = sorted({idx.row() for idx in self.table_view.selectionModel().selectedRows()})
