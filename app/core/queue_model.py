@@ -26,12 +26,16 @@ class SourceKind(Enum):
     URL = "URL"
 
 
-@dataclass
+@dataclass(eq=False)
 class QueueItem:
     """A single entry in the conversion queue.
 
     For FILE items, `source` is an absolute local path.
     For URL items, `source` is the raw URL string.
+
+    Compared and hashed by identity (`eq=False`): each entry is its own
+    object, which is what lets workers and `row_of()` find it after the
+    rows around it have changed.
     """
 
     source: str

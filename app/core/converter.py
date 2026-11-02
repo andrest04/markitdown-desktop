@@ -228,9 +228,11 @@ def iter_supported_files(folder: str):
 class WorkerSignals(QObject):
     """Signals for ConversionWorker; QRunnable itself cannot emit signals."""
 
-    started = Signal(int)
-    finished = Signal(int, str)
-    failed = Signal(int, str)
+    # Payload is the QueueItem itself: rows shift when the queue is edited
+    # while a conversion runs, identity does not.
+    started = Signal(object)
+    finished = Signal(object, str)
+    failed = Signal(object, str)
 
 
 class ConversionWorker(QRunnable):
@@ -241,18 +243,17 @@ class ConversionWorker(QRunnable):
     (the default for cross-thread signal/slot connections).
     """
 
-    def __init__(self, row: int, item: QueueItem, options: ConversionOptions):
+    def __init__(self, item: QueueItem, options: ConversionOptions):
         super().__init__()
-        self.row = row
         self.item = item
         self.options = options
         self.signals = WorkerSignals()
 
     def run(self) -> None:
-        self.signals.started.emit(self.row)
+        self.signals.started.emit(self.item)
         try:
             markdown_text = convert_item(self.item, self.options)
         except Exception as exc:  # noqa: BLE001 - must catch everything per-item
-            self.signals.failed.emit(self.row, str(exc))
+            self.signals.failed.emit(self.item, str(exc))
         else:
-            self.signals.finished.emit(self.row, markdown_text)
+            self.signals.finished.emit(self.item, markdown_text)

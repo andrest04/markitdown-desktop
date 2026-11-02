@@ -118,8 +118,11 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(880, 600)
 
         self.thread_pool = QThreadPool.globalInstance()
-        self._active_workers = 0
-        self._total_batch = 0
+        self._completed_count = 0
+        self._total_count = 0
+        # Dispatched but not yet finished. Status only changes once a worker
+        # actually starts, so it cannot guard against double dispatch.
+        self._in_flight: set[QueueItem] = set()
         self._preview_item: QueueItem | None = None
 
         self.enable_plugins = False
@@ -627,40 +630,40 @@ class MainWindow(QMainWindow):
     def _start_conversion(self, rows: list[int]) -> None:
         if not rows:
             return
-        options = self._current_options()
-        self._active_workers = 0
-        launched = 0
+        items = [self.model.item_at(row) for row in rows]
+        to_start = [item for item in items if item is not None and item not in self._in_flight]
+        if not to_start:
+            return
 
-        for row in rows:
-            item = self.model.item_at(row)
-            if item is None or item.status == ItemStatus.CONVERTING:
-                continue
-            worker = ConversionWorker(row, item, options)
+        if not self._in_flight:
+            self._completed_count = 0
+            self._total_count = 0
+        self._total_count += len(to_start)
+
+        options = self._current_options()
+        for item in to_start:
+            self._in_flight.add(item)
+            worker = ConversionWorker(item, options)
             worker.signals.started.connect(self._on_conversion_started)
             worker.signals.finished.connect(self._on_conversion_finished)
             worker.signals.failed.connect(self._on_conversion_failed)
             self.thread_pool.start(worker)
-            launched += 1
 
-        self._total_batch = launched
-        if launched == 0:
-            self.progress_bar.setVisible(False)
-            return
-        self.progress_bar.setMaximum(launched)
-        self.progress_bar.setValue(0)
+        self.progress_bar.setMaximum(self._total_count)
+        self.progress_bar.setValue(self._completed_count)
         self.progress_bar.setVisible(True)
 
-    def _on_conversion_started(self, row: int) -> None:
-        item = self.model.item_at(row)
-        if item is not None:
+    def _on_conversion_started(self, item: QueueItem) -> None:
+        row = self.model.row_of(item)
+        if row >= 0:
             item.status = ItemStatus.CONVERTING
             self.model.refresh_row(row)
             if self._selected_row() == row:
                 self._refresh_preview()
 
-    def _on_conversion_finished(self, row: int, markdown_text: str) -> None:
-        item = self.model.item_at(row)
-        if item is not None:
+    def _on_conversion_finished(self, item: QueueItem, markdown_text: str) -> None:
+        row = self.model.row_of(item)
+        if row >= 0:
             item.status = ItemStatus.DONE
             item.markdown_result = markdown_text
             item.error_message = ""
@@ -670,7 +673,7 @@ class MainWindow(QMainWindow):
                 self.table_view.selectRow(row)
             elif self._selected_row() == row:
                 self._refresh_preview()
-        self._advance_progress()
+        self._advance_progress(item)
 
     def _auto_save_to_downloads(self, item: QueueItem) -> None:
         """Write a freshly converted item straight to Downloads (the whole
@@ -687,21 +690,22 @@ class MainWindow(QMainWindow):
             item.save_error = ""
             self.status_bar.showMessage(tr("status.saved_to", path=saved_path), 5000)
 
-    def _on_conversion_failed(self, row: int, message: str) -> None:
-        item = self.model.item_at(row)
-        if item is not None:
+    def _on_conversion_failed(self, item: QueueItem, message: str) -> None:
+        row = self.model.row_of(item)
+        if row >= 0:
             item.status = ItemStatus.ERROR
             item.error_message = message
             self.model.refresh_row(row)
             if self._selected_row() == row:
                 self._refresh_preview()
-        self._advance_progress()
+        self._advance_progress(item)
         self.status_bar.showMessage(tr("status.conversion_failed", message=message), 5000)
 
-    def _advance_progress(self) -> None:
-        self._active_workers += 1
-        self.progress_bar.setValue(self._active_workers)
-        if self._active_workers >= self._total_batch:
+    def _advance_progress(self, item: QueueItem) -> None:
+        self._in_flight.discard(item)
+        self._completed_count += 1
+        self.progress_bar.setValue(self._completed_count)
+        if not self._in_flight:
             self.status_bar.showMessage(tr("status.batch_complete"), 4000)
             self.progress_bar.setVisible(False)
 
