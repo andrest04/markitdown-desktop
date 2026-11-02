@@ -7,11 +7,12 @@ style painted behind the cell can never show through.
 """
 from __future__ import annotations
 
+import os
 import re
 from collections import Counter
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEvent, QPointF, QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QLocale, QPointF, QRect, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QApplication,
@@ -23,7 +24,8 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.queue_model import DisplayState, QueueItem, QueueTableModel, SourceKind
-from app.i18n import tr
+from app.i18n import LANG_ES, tr
+from app.i18n import manager as i18n_manager
 from app.ui.theme import Tokens, tokens_for
 
 ROW_HEIGHT = 52
@@ -97,6 +99,38 @@ def row_status_text(item: QueueItem) -> str:
     if state == DisplayState.SAVE_FAILED:
         return tr("status.not_saved_reason", reason=brief_error(item.save_error))
     return tr(state.value)
+
+
+def word_count(markdown: str | None) -> int:
+    """Words in converted Markdown. Tokens with no letter or digit, such as
+    `#`, `-`, `|` and `---`, are syntax rather than words."""
+    return sum(1 for token in (markdown or "").split() if any(char.isalnum() for char in token))
+
+
+def _words_text(markdown: str) -> str:
+    count = word_count(markdown)
+    locale = QLocale(QLocale.Language.Spanish if i18n_manager.language == LANG_ES else QLocale.Language.English)
+    return tr("detail.words.one" if count == 1 else "detail.words.other", count=locale.toString(count))
+
+
+def detail_status(item: QueueItem) -> str:
+    """The detail header's line: what is real about this item's output."""
+    state = item.display_state
+    if state == DisplayState.SAVED:
+        status = tr("status.saved_as", name=os.path.basename(item.saved_path))
+    elif state == DisplayState.DONE:
+        status = tr(state.value)
+    elif state == DisplayState.SAVE_FAILED:
+        return tr("status.save_failed_detail", error=brief_error(item.save_error))
+    elif state == DisplayState.ERROR:
+        return brief_error(item.error_message) or tr("preview.failed")
+    elif state == DisplayState.CONVERTING:
+        return tr("preview.converting")
+    else:
+        return tr("preview.pending")
+    if item.markdown_result is None:
+        return status
+    return f"{status}, {_words_text(item.markdown_result)}"
 
 
 def retry_rect(cell: QRect, item: QueueItem) -> QRect | None:

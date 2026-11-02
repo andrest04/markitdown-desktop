@@ -40,7 +40,7 @@ MATRIX = [
         "item": (ItemStatus.DONE, SAVED_PATH, ""),
         "text": "status.done_saved", "tooltip": tr("tooltip.saved_to", path=SAVED_PATH),
         "color": "muted",
-        "header": "status.done_saved", "kind": "saved", "open": True, "retry": False,
+        "header": None, "header_text": tr("status.saved_as", name="saved.md"), "kind": "saved", "open": True, "retry": False,
     },
     {
         "item": (ItemStatus.DONE, "", "disk full"),

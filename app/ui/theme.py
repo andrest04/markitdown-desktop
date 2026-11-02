@@ -9,6 +9,7 @@ only other hue. See `tests/test_theme_contrast.py` for the checked pairings.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from PySide6.QtGui import QColor, QFont, QPalette
@@ -25,8 +26,12 @@ FONT_MONO = (
     '"Ubuntu Mono", "DejaVu Sans Mono", monospace'
 )
 
-# Rendered Markdown stops growing at a comfortable reading measure.
-READING_WIDTH = 720
+# Rendered Markdown stops at a reading measure: at the 15px body, with the
+# document margins taken off, about 80 characters a line.
+READING_WIDTH = 580
+PREVIEW_MARGIN = 22
+# A table with more columns than this reads better wide than wrapped to the measure.
+_MEASURE_TABLE_COLUMNS = 4
 
 
 @dataclass(frozen=True)
@@ -479,6 +484,12 @@ QToolTip {{
     background: transparent;
     color: {t.muted};
 }}
+#PreviewErrorDetail {{
+    background: transparent;
+    color: {t.muted};
+    font-family: {FONT_MONO};
+    font-size: 12px;
+}}
 """
 
 
@@ -488,19 +499,60 @@ def stylesheet_for(theme_name: str) -> str:
 
 
 def document_css_for(theme_name: str) -> str:
-    """Default stylesheet for rendered Markdown in the preview."""
+    """Default stylesheet for rendered Markdown in the preview.
+
+    Qt's rich text is a subset of CSS: no padding on plain blocks and little
+    margin on tables or lists. `preview_html()` supplies what CSS cannot.
+    """
     t = tokens_for(theme_name)
     return f"""
 a {{ color: {t.ink}; text-decoration: underline; }}
 h1, h2, h3, h4 {{ color: {t.ink}; font-weight: 600; }}
-h1 {{ font-size: 22px; margin-top: 4px; margin-bottom: 8px; }}
-h2 {{ font-size: 17px; margin-top: 16px; margin-bottom: 6px; }}
-h3 {{ font-size: 14px; margin-top: 12px; margin-bottom: 4px; }}
-p {{ margin-bottom: 10px; line-height: 140%; }}
-ul, ol {{ margin-bottom: 10px; }}
-code, pre {{ font-family: {FONT_MONO}; background-color: {t.desk}; }}
-blockquote {{ color: {t.muted}; margin-left: 16px; }}
-table {{ border-collapse: collapse; margin-bottom: 10px; }}
+h1 {{ font-size: 24px; margin-top: 4px; margin-bottom: 12px; }}
+h2 {{ font-size: 18px; margin-top: 24px; margin-bottom: 8px; }}
+h3, h4 {{ font-size: 15px; margin-top: 18px; margin-bottom: 6px; }}
+p, li, td, th {{ font-size: 15px; }}
+p {{ margin-top: 0; margin-bottom: 12px; line-height: 120%; }}
+ul, ol {{ margin-top: 0; margin-bottom: 12px; }}
+li {{ margin-bottom: 6px; }}
+code {{ font-family: {FONT_MONO}; font-size: 13px; background-color: {t.desk}; }}
+pre {{ font-family: {FONT_MONO}; font-size: 13px; margin: 0; line-height: 140%; }}
 th {{ font-weight: 600; text-align: left; }}
-th, td {{ padding: 4px 16px 4px 0; border-bottom: 1px solid {t.rule}; }}
+th, td {{ padding: 5px 20px 5px 0; border-bottom: 1px solid {t.rule}; }}
 """
+
+
+_PRE = re.compile(r"<pre>(.*?)</pre>", re.DOTALL)
+_BLOCKQUOTE = re.compile(r"<blockquote>(.*?)</blockquote>", re.DOTALL)
+_BLOCK_SPACING = "margin-top:12px;margin-bottom:16px"
+
+
+def preview_html(html: str, theme_name: str) -> str:
+    """Give converted HTML the spacing Qt's rich text only honors on table cells."""
+    t = tokens_for(theme_name)
+
+    def code_block(found: re.Match) -> str:
+        code = found.group(1).replace("\n</code>", "</code>").rstrip()
+        return (
+            f'<table width="100%" cellspacing="0" cellpadding="12" bgcolor="{t.desk}" style="{_BLOCK_SPACING}">'
+            f'<tr><td style="border:none;padding:12px"><pre>{code}</pre></td></tr></table>'
+        )
+
+    def quote(found: re.Match) -> str:
+        return (
+            f'<table cellspacing="0" cellpadding="0" style="{_BLOCK_SPACING}"><tr>'
+            f'<td width="1" bgcolor="{t.edge}" style="border:none;padding:0"></td>'
+            f'<td style="border:none;padding:2px 0 2px 14px;color:{t.muted}">{found.group(1)}</td>'
+            "</tr></table>"
+        )
+
+    html = html.replace("<table>", f'<table cellspacing="0" style="{_BLOCK_SPACING}">')
+    return _BLOCKQUOTE.sub(quote, _PRE.sub(code_block, html))
+
+
+def needs_full_width(html: str) -> bool:
+    """Whether a table in this preview has more columns than the measure can hold."""
+    return any(
+        row.count("<th") + row.count("<td") > _MEASURE_TABLE_COLUMNS
+        for row in re.findall(r"<tr>(.*?)</tr>", html, re.DOTALL)
+    )

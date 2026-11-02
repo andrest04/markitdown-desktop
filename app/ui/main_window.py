@@ -67,12 +67,16 @@ from app.ui.queue_delegate import (
     QueueItemDelegate,
     StatusMark,
     brief_error,
+    detail_status,
     queue_summary,
 )
 from app.ui.theme import (
+    PREVIEW_MARGIN,
     READING_WIDTH,
     apply_fusion_palette,
     document_css_for,
+    needs_full_width,
+    preview_html,
     set_tier,
     stylesheet_for,
 )
@@ -80,23 +84,22 @@ from app.ui.theme import (
 ORG_NAME = "andres"
 APP_NAME = "MarkItDownDesktop"
 
-# Preview header per state: translation key and the stylesheet `kind` property.
-_HEADER_STATUS = {
-    DisplayState.PENDING: ("preview.pending", "pending"),
-    DisplayState.CONVERTING: ("preview.converting", "converting"),
-    DisplayState.DONE: ("status.done", "pending"),
-    DisplayState.SAVED: ("status.done_saved", "saved"),
-    DisplayState.SAVE_FAILED: ("status.done_save_failed", "error"),
-    DisplayState.ERROR: ("preview.failed", "error"),
+# Preview header per state: the stylesheet `kind` property.
+_HEADER_KIND = {
+    DisplayState.PENDING: "pending",
+    DisplayState.CONVERTING: "converting",
+    DisplayState.DONE: "pending",
+    DisplayState.SAVED: "saved",
+    DisplayState.SAVE_FAILED: "error",
+    DisplayState.ERROR: "error",
 }
 
 _SPINNER_INTERVAL_MS = 90
 _COPY_FEEDBACK_MS = 1500
 _LIST_WIDTH = 340
-# With the view's 2px focus border this lines the text up with the pane header.
-_SHEET_MARGIN = 22
 _PANE_MARGIN = 24
 _PROGRESS_HEIGHT = 2
+_ERROR_DETAIL_CHARS = 1200
 _BRAND_MARGINS_EMPTY = (EMPTY_GUTTER, 18, EMPTY_GUTTER, 0)
 # Centers the mark on the state marks below and starts the name on their text edge.
 _BRAND_MARGINS_FILLED = (12, 14, 14, 10)
@@ -126,6 +129,7 @@ class MainWindow(QMainWindow):
         self.setMinimumHeight(560)
 
         self._preview_item: QueueItem | None = None
+        self._preview_full_width = False
 
         self.conversion_options = ConversionOptions()
 
@@ -228,7 +232,7 @@ class MainWindow(QMainWindow):
             elif watched is self.preview_panel:
                 self._fit_preview_title()
             elif watched is self.rendered_view.viewport():
-                self.rendered_view.setLineWrapColumnOrWidth(min(watched.width(), READING_WIDTH))
+                self._fit_reading_width()
         return super().eventFilter(watched, event)
 
     def _on_drag_active_changed(self, active: bool) -> None:
@@ -457,6 +461,15 @@ class MainWindow(QMainWindow):
         self.preview_empty_hint.setWordWrap(True)
         empty_layout.addWidget(self.preview_empty_title)
         empty_layout.addWidget(self.preview_empty_hint)
+        empty_layout.addSpacing(12)
+        # The header gives the one line that matters; this is the rest of it.
+        self.preview_error_detail = QLabel()
+        self.preview_error_detail.setObjectName("PreviewErrorDetail")
+        self.preview_error_detail.setWordWrap(True)
+        self.preview_error_detail.setTextFormat(Qt.TextFormat.PlainText)
+        self.preview_error_detail.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.preview_error_detail.setVisible(False)
+        empty_layout.addWidget(self.preview_error_detail)
         empty_layout.addStretch(1)
 
         self.preview_body = QWidget()
@@ -468,12 +481,13 @@ class MainWindow(QMainWindow):
         self.tabs.tabBar().setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.rendered_view = QTextBrowser()
         self.rendered_view.setOpenExternalLinks(True)
-        self.rendered_view.document().setDocumentMargin(_SHEET_MARGIN)
+        self.rendered_view.document().setDocumentMargin(PREVIEW_MARGIN)
+        self.rendered_view.document().setIndentWidth(PREVIEW_MARGIN)
         self.rendered_view.setLineWrapMode(QTextBrowser.LineWrapMode.FixedPixelWidth)
         self.rendered_view.setLineWrapColumnOrWidth(READING_WIDTH)
         self.raw_view = QPlainTextEdit()
         self.raw_view.setPlaceholderText(tr("raw.placeholder"))
-        self.raw_view.document().setDocumentMargin(_SHEET_MARGIN)
+        self.raw_view.document().setDocumentMargin(PREVIEW_MARGIN)
         self.raw_view.textChanged.connect(self._on_raw_text_changed)
         self.tabs.addTab(self.rendered_view, tr("tab.rendered"))
         self.tabs.addTab(self.raw_view, tr("tab.raw"))
@@ -829,7 +843,7 @@ class MainWindow(QMainWindow):
             self._show_preview_empty("", tr("preview.pending.hint"))
             return
         if item.status == ItemStatus.ERROR:
-            self._show_preview_empty("", tr("preview.failed.hint"))
+            self._show_preview_empty("", tr("preview.failed.hint"), self._error_detail(item))
             return
         if item.markdown_result:
             self._show_item_preview(item)
@@ -846,14 +860,8 @@ class MainWindow(QMainWindow):
         self.preview_header_name.setToolTip(item.source)
         self._fit_preview_title()
         state = item.display_state
-        key, kind = _HEADER_STATUS[state]
-        if state == DisplayState.SAVE_FAILED:
-            status = tr("status.save_failed_detail", error=brief_error(item.save_error))
-        elif state == DisplayState.ERROR:
-            status = brief_error(item.error_message) or tr(key)
-        else:
-            status = tr(key)
-        self.preview_header_status.setText(status)
+        kind = _HEADER_KIND[state]
+        self.preview_header_status.setText(detail_status(item))
         self.preview_header_status.setToolTip(self._status_detail(item))
         self.preview_header_status.setProperty("kind", kind)
         self.preview_header_status.style().unpolish(self.preview_header_status)
@@ -927,10 +935,22 @@ class MainWindow(QMainWindow):
             )
         )
 
-    def _show_preview_empty(self, title: str, hint: str) -> None:
+    @staticmethod
+    def _error_detail(item: QueueItem) -> str:
+        """The full message, only when it says more than the header's one line."""
+        message = item.error_message.strip()
+        if message == brief_error(message):
+            return ""
+        if len(message) > _ERROR_DETAIL_CHARS:
+            return message[:_ERROR_DETAIL_CHARS].rstrip() + "…"
+        return message
+
+    def _show_preview_empty(self, title: str, hint: str, detail: str = "") -> None:
         self.preview_empty_title.setText(title)
         self.preview_empty_title.setVisible(bool(title))
         self.preview_empty_hint.setText(hint)
+        self.preview_error_detail.setText(detail)
+        self.preview_error_detail.setVisible(bool(detail))
         self.preview_empty.setVisible(True)
         self.preview_body.setVisible(False)
 
@@ -997,11 +1017,18 @@ class MainWindow(QMainWindow):
         item = self.model.item_at(row)
         if item is not None:
             item.markdown_result = text
+            self._update_preview_header(item)
         self._render_markdown(text)
 
     def _render_markdown(self, text: str) -> None:
         html = markdown_lib.markdown(text, extensions=["extra", "sane_lists", "tables"]) if text else ""
-        self.rendered_view.setHtml(html)
+        self._preview_full_width = needs_full_width(html)
+        self._fit_reading_width()
+        self.rendered_view.setHtml(preview_html(html, self._current_theme_name()))
+
+    def _fit_reading_width(self) -> None:
+        width = self.rendered_view.viewport().width()
+        self.rendered_view.setLineWrapColumnOrWidth(width if self._preview_full_width else min(width, READING_WIDTH))
 
     def _show_queue_menu(self, pos) -> None:
         index = self.table_view.indexAt(pos)
