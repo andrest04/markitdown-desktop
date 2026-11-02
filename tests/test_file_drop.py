@@ -10,6 +10,7 @@ from qt_support import WindowTestCase
 
 from app.i18n import LANG_ES, tr
 from app.i18n import manager as i18n_manager
+from app.ui.drop_zone import FILLED_HEIGHT
 
 
 def file_mime(*paths: str) -> QMimeData:
@@ -103,8 +104,8 @@ class DropZoneRetranslateTests(WindowTestCase):
 
         i18n_manager.set_language(LANG_ES, self.window.settings)
 
-        self.assertEqual(zone._title.text(), tr("dropzone.title.filled"))
-        self.assertEqual(zone.maximumHeight(), 96)
+        self.assertEqual(zone.url_edit.placeholderText(), tr("url.placeholder.filled"))
+        self.assertEqual(zone.maximumHeight(), FILLED_HEIGHT)
 
 
 if __name__ == "__main__":

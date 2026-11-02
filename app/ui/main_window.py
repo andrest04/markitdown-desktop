@@ -7,11 +7,10 @@ import sys
 import webbrowser
 
 import markdown as markdown_lib
-from PySide6.QtCore import QSettings, Qt, QUrl
+from PySide6.QtCore import QEvent, QSettings, Qt, QTimer, QUrl
 from PySide6.QtGui import (
     QAction,
     QDesktopServices,
-    QFont,
     QGuiApplication,
     QKeySequence,
     QShortcut,
@@ -29,6 +28,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QStatusBar,
     QTableView,
@@ -60,7 +60,13 @@ from app.ui.about_dialog import AboutDialog
 from app.ui.advanced_settings_dialog import AdvancedSettingsDialog
 from app.ui.drop_zone import DropZone
 from app.ui.queue_delegate import ROW_HEIGHT, QueueItemDelegate
-from app.ui.theme import apply_fusion_palette, stylesheet_for
+from app.ui.theme import (
+    READING_WIDTH,
+    apply_fusion_palette,
+    document_css_for,
+    set_tier,
+    stylesheet_for,
+)
 
 ORG_NAME = "andres"
 APP_NAME = "MarkItDownDesktop"
@@ -74,6 +80,21 @@ _HEADER_STATUS = {
     DisplayState.SAVE_FAILED: ("status.done_save_failed", "error"),
     DisplayState.ERROR: ("preview.failed", "error"),
 }
+
+_SPINNER_INTERVAL_MS = 90
+_COPY_FEEDBACK_MS = 1500
+_BRIEF_ERROR_CHARS = 200
+_LIST_WIDTH = 340
+# With the view's 2px focus border this lines the text up with the pane header.
+_SHEET_MARGIN = 22
+_PANE_MARGIN = 24
+
+
+def _brief_error(message: str) -> str:
+    """First line of a conversion error, short enough for the status line."""
+    lines = message.strip().splitlines()
+    first = lines[0] if lines else ""
+    return first if len(first) <= _BRIEF_ERROR_CHARS else first[:_BRIEF_ERROR_CHARS].rstrip() + "…"
 
 
 def detect_system_theme() -> str:
@@ -93,7 +114,9 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(tr("window.title"))
         self.resize(1180, 780)
-        self.setMinimumSize(880, 600)
+        # Height only: an explicit width would override the layout's minimum
+        # and clip the action row in longer languages or larger fonts.
+        self.setMinimumHeight(560)
 
         self._preview_item: QueueItem | None = None
 
@@ -109,6 +132,14 @@ class MainWindow(QMainWindow):
         self.conversion_queue.progress_changed.connect(self._on_progress_changed)
         self.conversion_queue.batch_finished.connect(self._on_batch_finished)
 
+        self._spinner = QTimer(self)
+        self._spinner.setInterval(_SPINNER_INTERVAL_MS)
+        self._spinner.timeout.connect(self._advance_spinner)
+        self._copy_feedback = QTimer(self)
+        self._copy_feedback.setSingleShot(True)
+        self._copy_feedback.setInterval(_COPY_FEEDBACK_MS)
+        self._copy_feedback.timeout.connect(self._restore_copy_label)
+
         self._build_ui()
         self._build_menu()
         self._build_language_switcher()
@@ -116,43 +147,94 @@ class MainWindow(QMainWindow):
         self._restore_settings()
         self._apply_theme(self._current_theme_name())
         self._update_drop_zone_prominence()
+        self.centralWidget().setFocus()
 
     def _build_ui(self) -> None:
         central = QWidget()
+        # Holds focus on launch and after clicking empty space, so a focus ring
+        # only appears once the keyboard moves it.
+        central.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
-        root.setContentsMargins(18, 14, 18, 10)
-        root.setSpacing(10)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(False)
-        self.progress_bar.setFixedHeight(3)
+        self.progress_bar.setFixedHeight(2)
+        # Keeps its strip when hidden, so a batch starting never shifts the panes.
+        policy = self.progress_bar.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        self.progress_bar.setSizePolicy(policy)
         self.progress_bar.setVisible(False)
         root.addWidget(self.progress_bar)
 
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.splitter.setHandleWidth(1)
+        self.splitter.setChildrenCollapsible(False)
         root.addWidget(self.splitter, 1)
 
         self.left_panel = self._build_left_panel()
         self.preview_panel = self._build_right_panel()
         self.splitter.addWidget(self.left_panel)
         self.splitter.addWidget(self.preview_panel)
-        self.splitter.setStretchFactor(0, 4)
-        self.splitter.setStretchFactor(1, 6)
-        self.splitter.setSizes([420, 720])
+        self.splitter.setStretchFactor(0, 0)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setSizes([_LIST_WIDTH, 840])
 
         self.status_bar = QStatusBar()
+        self.status_bar.setSizeGripEnabled(False)
         self.setStatusBar(self.status_bar)
 
-        self.drop_zone.accept_drops_on(self.left_panel, self.preview_panel, self.table_view.viewport())
+        self.drag_overlay = QLabel(tr("overlay.drop"), central)
+        self.drag_overlay.setObjectName("DragOverlay")
+        self.drag_overlay.setIndent(56)
+        self.drag_overlay.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        # Transparent to the drag as well, so the drop lands on the panes below.
+        self.drag_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.drag_overlay.setVisible(False)
+        self.drop_zone.drag_active_changed.connect(self._on_drag_active_changed)
+        central.installEventFilter(self)
+        self.preview_panel.installEventFilter(self)
+        self.rendered_view.viewport().installEventFilter(self)
+
+        # The window itself catches the menu bar, status bar and everything
+        # that has no drop handling. The rest would refuse the drag themselves.
+        self.drop_zone.accept_drops_on(
+            self,
+            self.left_panel,
+            self.preview_panel,
+            self.table_view.viewport(),
+            self.rendered_view.viewport(),
+            self.raw_view.viewport(),
+            self.url_edit,
+        )
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Type.Resize:
+            if watched is self.centralWidget():
+                self.drag_overlay.setGeometry(watched.rect())
+            elif watched is self.preview_panel:
+                self._fit_preview_title()
+            elif watched is self.rendered_view.viewport():
+                self.rendered_view.setLineWrapColumnOrWidth(min(watched.width(), READING_WIDTH))
+        return super().eventFilter(watched, event)
+
+    def _on_drag_active_changed(self, active: bool) -> None:
+        self.drag_overlay.setGeometry(self.centralWidget().rect())
+        self.drag_overlay.setVisible(active)
+        if active:
+            self.drag_overlay.raise_()
 
     def _build_left_panel(self) -> QWidget:
         panel = QWidget()
         panel.setObjectName("QueuePane")
+        panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        panel.setMinimumWidth(300)
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(0, 0, 8, 0)
-        layout.setSpacing(10)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
         self.drop_zone = DropZone(
             self._add_paths,
@@ -170,13 +252,15 @@ class MainWindow(QMainWindow):
         self.table_view.setAlternatingRowColors(False)
         self.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table_view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.table_view.setItemDelegate(QueueItemDelegate(self.table_view))
+        self.queue_delegate = QueueItemDelegate(self.table_view)
+        self.table_view.setItemDelegate(self.queue_delegate)
         self.table_view.horizontalHeader().setVisible(False)
         self.table_view.verticalHeader().setVisible(False)
         self.table_view.setColumnHidden(COLUMN_TYPE, True)
         self.table_view.setColumnHidden(COLUMN_STATUS, True)
         self.table_view.horizontalHeader().setSectionResizeMode(0, self.table_view.horizontalHeader().ResizeMode.Stretch)
         self.table_view.verticalHeader().setDefaultSectionSize(ROW_HEIGHT)
+        self.table_view.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.table_view.setMouseTracking(True)
         self.table_view.setWordWrap(False)
         self.table_view.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -188,124 +272,124 @@ class MainWindow(QMainWindow):
 
         self.queue_controls_widget = QWidget()
         queue_controls_layout = QHBoxLayout(self.queue_controls_widget)
-        queue_controls_layout.setContentsMargins(0, 0, 0, 0)
-        self.remove_btn = QPushButton(tr("button.remove_selected"))
-        self.remove_btn.setObjectName("secondary")
-        self.remove_btn.clicked.connect(self.action_remove_selected)
+        queue_controls_layout.setContentsMargins(8, 6, 8, 8)
+        queue_controls_layout.setSpacing(2)
+        self.add_files_btn = QPushButton(tr("button.add_files"))
+        self.add_files_btn.clicked.connect(self.action_add_files)
         self.clear_btn = QPushButton(tr("button.clear_all"))
-        self.clear_btn.setObjectName("danger")
         self.clear_btn.clicked.connect(self.action_clear_all)
-        queue_controls_layout.addWidget(self.remove_btn)
+        for button in (self.add_files_btn, self.clear_btn):
+            set_tier(button, "ghost")
+        queue_controls_layout.addWidget(self.add_files_btn)
+        queue_controls_layout.addStretch(1)
         queue_controls_layout.addWidget(self.clear_btn)
         layout.addWidget(self.queue_controls_widget)
 
-        self.model.rowsInserted.connect(self._update_drop_zone_prominence)
-        self.model.rowsRemoved.connect(self._update_drop_zone_prominence)
-        self.model.modelReset.connect(self._update_drop_zone_prominence)
+        for signal in (self.model.rowsInserted, self.model.rowsRemoved, self.model.modelReset):
+            signal.connect(self._update_drop_zone_prominence)
+        for signal in (self.model.dataChanged, self.model.rowsInserted, self.model.rowsRemoved, self.model.modelReset):
+            signal.connect(self._sync_spinner)
 
         return panel
 
     def _update_drop_zone_prominence(self, *args) -> None:
         empty = len(self.model.items()) == 0
         self.drop_zone.set_prominent(empty)
+        self.left_panel.setProperty("empty", empty)
+        self.left_panel.style().unpolish(self.left_panel)
+        self.left_panel.style().polish(self.left_panel)
         self.table_view.setVisible(not empty)
         self.queue_controls_widget.setVisible(not empty)
         self.preview_panel.setVisible(not empty)
+        self.status_bar.setVisible(not empty)
+        self.clear_action.setEnabled(not empty)
         if empty:
             self._update_preview_header(None)
-            self._show_preview_empty(tr("preview.empty"), tr("preview.empty.hint"))
+            self._show_preview_empty("", "")
 
     def _build_right_panel(self) -> QWidget:
         panel = QWidget()
         panel.setObjectName("PreviewPane")
+        panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(8, 0, 0, 0)
-        layout.setSpacing(10)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
         self.preview_header = QWidget()
         self.preview_header.setObjectName("PreviewHeader")
-        self.preview_header.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.preview_header.setVisible(False)
         header = QVBoxLayout(self.preview_header)
-        header.setContentsMargins(14, 10, 14, 10)
-        header.setSpacing(6)
+        header.setContentsMargins(_PANE_MARGIN, 16, _PANE_MARGIN, 12)
+        header.setSpacing(2)
         self.preview_header_name = QLabel()
         self.preview_header_name.setObjectName("PreviewHeaderName")
-        self.preview_header_name.setWordWrap(True)
+        # Elided to the pane by hand; a long unbroken name must not widen it.
+        self.preview_header_name.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.preview_header_status = QLabel()
         self.preview_header_status.setObjectName("PreviewHeaderStatus")
         self.preview_header_status.setWordWrap(True)
+        self.preview_header_status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        status_policy = QSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        status_policy.setHeightForWidth(True)
+        self.preview_header_status.setSizePolicy(status_policy)
         header.addWidget(self.preview_header_name)
         header.addWidget(self.preview_header_status)
+        header.addSpacing(10)
+
         header_actions = QHBoxLayout()
-        header_actions.setSpacing(8)
+        header_actions.setSpacing(6)
+        self.copy_btn = QPushButton(tr("button.copy_raw"))
+        self.copy_btn.clicked.connect(self.action_copy_raw)
         self.open_file_btn = QPushButton(tr("button.open_file"))
         self.open_file_btn.clicked.connect(self._open_preview_file)
         self.reveal_btn = QPushButton(tr("button.open_folder"))
-        self.reveal_btn.setObjectName("secondary")
         self.reveal_btn.clicked.connect(self._reveal_preview_file)
         self.retry_header_btn = QPushButton(tr("menu.retry"))
-        self.retry_header_btn.setObjectName("secondary")
         self.retry_header_btn.clicked.connect(self.action_convert_selected)
+        self.more_btn = QPushButton(tr("button.more"))
+        set_tier(self.more_btn, "ghost")
+        # The primary sits first whichever it is, so the eye always lands there.
+        header_actions.addWidget(self.retry_header_btn)
+        header_actions.addWidget(self.copy_btn)
         header_actions.addWidget(self.open_file_btn)
         header_actions.addWidget(self.reveal_btn)
-        header_actions.addWidget(self.retry_header_btn)
         header_actions.addStretch(1)
+        header_actions.addWidget(self.more_btn)
         header.addLayout(header_actions)
         layout.addWidget(self.preview_header)
 
         self.preview_empty = QWidget()
         empty_layout = QVBoxLayout(self.preview_empty)
-        empty_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview_empty_title = QLabel(tr("preview.empty"))
+        empty_layout.setContentsMargins(_PANE_MARGIN, 8, _PANE_MARGIN, _PANE_MARGIN)
+        empty_layout.setSpacing(4)
+        self.preview_empty_title = QLabel()
         self.preview_empty_title.setObjectName("PreviewEmptyTitle")
-        self.preview_empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview_empty_title.setWordWrap(True)
-        self.preview_empty_hint = QLabel(tr("preview.empty.hint"))
+        self.preview_empty_hint = QLabel()
         self.preview_empty_hint.setObjectName("PreviewEmptyHint")
-        self.preview_empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview_empty_hint.setWordWrap(True)
         empty_layout.addWidget(self.preview_empty_title)
         empty_layout.addWidget(self.preview_empty_hint)
+        empty_layout.addStretch(1)
 
         self.preview_body = QWidget()
         body_layout = QVBoxLayout(self.preview_body)
         body_layout.setContentsMargins(0, 0, 0, 0)
-        body_layout.setSpacing(10)
+        body_layout.setSpacing(0)
 
         self.tabs = QTabWidget()
         self.rendered_view = QTextBrowser()
         self.rendered_view.setOpenExternalLinks(True)
+        self.rendered_view.document().setDocumentMargin(_SHEET_MARGIN)
+        self.rendered_view.setLineWrapMode(QTextBrowser.LineWrapMode.FixedPixelWidth)
+        self.rendered_view.setLineWrapColumnOrWidth(READING_WIDTH)
         self.raw_view = QPlainTextEdit()
         self.raw_view.setPlaceholderText(tr("raw.placeholder"))
-        font = QFont("Cascadia Code")
-        font.setStyleHint(QFont.StyleHint.Monospace)
-        font.setPointSize(10)
-        self.raw_view.setFont(font)
+        self.raw_view.document().setDocumentMargin(_SHEET_MARGIN)
         self.raw_view.textChanged.connect(self._on_raw_text_changed)
         self.tabs.addTab(self.rendered_view, tr("tab.rendered"))
         self.tabs.addTab(self.raw_view, tr("tab.raw"))
         body_layout.addWidget(self.tabs, 1)
-
-        self.autosave_note = QLabel(tr("note.autosave"))
-        self.autosave_note.setWordWrap(True)
-        self.autosave_note.setObjectName("SupportedTypesLabel")
-        body_layout.addWidget(self.autosave_note)
-
-        btn_row = QHBoxLayout()
-        self.copy_btn = QPushButton(tr("button.copy_raw"))
-        self.copy_btn.setObjectName("secondary")
-        self.copy_btn.clicked.connect(self.action_copy_raw)
-        self.save_md_btn = QPushButton(tr("button.save_copy_as"))
-        self.save_md_btn.setObjectName("secondary")
-        self.save_md_btn.clicked.connect(self.action_save_current)
-        self.export_all_btn = QPushButton(tr("button.export_all_to"))
-        self.export_all_btn.setObjectName("ghost")
-        self.export_all_btn.clicked.connect(self.action_export_all)
-        btn_row.addWidget(self.copy_btn)
-        btn_row.addWidget(self.save_md_btn)
-        btn_row.addWidget(self.export_all_btn)
-        body_layout.addLayout(btn_row)
 
         layout.addWidget(self.preview_empty, 1)
         layout.addWidget(self.preview_body, 1)
@@ -321,6 +405,8 @@ class MainWindow(QMainWindow):
         self.add_files_action.setShortcut(QKeySequence.StandardKey.Open)
         self.add_folder_action = self._make_action("menu.add_folder", self.action_add_folder)
         self.add_url_action = self._make_action("menu.add_url", lambda: self.url_edit.setFocus())
+        self.open_file_action = self._make_action("menu.open_file", self._open_preview_file)
+        self.reveal_action = self._make_action("menu.open_folder", self._reveal_preview_file)
         self.save_copy_action = self._make_action("menu.save_copy_as", self.action_save_current)
         self.export_all_action = self._make_action("menu.export_all_to", self.action_export_all)
         self.exit_action = self._make_action("menu.exit", self.close)
@@ -329,14 +415,35 @@ class MainWindow(QMainWindow):
         self.file_menu.addAction(self.add_folder_action)
         self.file_menu.addAction(self.add_url_action)
         self.file_menu.addSeparator()
+        self.file_menu.addAction(self.open_file_action)
+        self.file_menu.addAction(self.reveal_action)
+        self.file_menu.addSeparator()
         self.file_menu.addAction(self.save_copy_action)
         self.file_menu.addAction(self.export_all_action)
         self.file_menu.addSeparator()
         self.file_menu.addAction(self.exit_action)
 
         self.edit_menu = menu_bar.addMenu(tr("menu.edit"))
+        self.copy_action = self._make_action("button.copy_raw", self.action_copy_raw)
+        self.copy_action.setShortcut(QKeySequence("Ctrl+Shift+C"))
+        self.retry_action = self._make_action("menu.retry", self.action_convert_selected)
+        self.remove_action = self._make_action("menu.remove", self.action_remove_selected)
+        self.clear_action = self._make_action("button.clear_all", self.action_clear_all)
         self.advanced_settings_action = self._make_action("menu.advanced_settings", self._show_advanced_settings)
+        self.edit_menu.addAction(self.copy_action)
+        self.edit_menu.addAction(self.retry_action)
+        self.edit_menu.addSeparator()
+        self.edit_menu.addAction(self.remove_action)
+        self.edit_menu.addAction(self.clear_action)
+        self.edit_menu.addSeparator()
         self.edit_menu.addAction(self.advanced_settings_action)
+
+        self.more_menu = QMenu(self)
+        self.more_menu.addAction(self.save_copy_action)
+        self.more_menu.addAction(self.export_all_action)
+        self.more_menu.addSeparator()
+        self.more_menu.addAction(self.remove_action)
+        self.more_btn.setMenu(self.more_menu)
 
         self.view_menu = menu_bar.addMenu(tr("menu.view"))
         self.theme_system_action = QAction(tr("menu.theme_system"), self, checkable=True)
@@ -373,8 +480,6 @@ class MainWindow(QMainWindow):
         for btn in (self.lang_en_btn, self.lang_es_btn):
             btn.setObjectName("lang")
             btn.setCheckable(True)
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.lang_en_btn.clicked.connect(lambda: i18n_manager.set_language(LANG_EN, self.settings))
         self.lang_es_btn.clicked.connect(lambda: i18n_manager.set_language(LANG_ES, self.settings))
         corner_layout.addWidget(self.lang_en_btn)
@@ -384,6 +489,9 @@ class MainWindow(QMainWindow):
 
     def _install_shortcuts(self) -> None:
         QShortcut(QKeySequence.StandardKey.Delete, self.table_view, self.action_remove_selected)
+        # Mouse clicks leave focus alone, so a focus ring only ever means the keyboard.
+        for button in self.findChildren(QPushButton):
+            button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
 
     def _sync_language_buttons(self) -> None:
         language = i18n_manager.language
@@ -420,6 +528,8 @@ class MainWindow(QMainWindow):
             apply_fusion_palette(app, theme_name)
             app.setProperty("themeName", theme_name)
             app.setStyleSheet(stylesheet_for(theme_name))
+        self.rendered_view.document().setDefaultStyleSheet(document_css_for(theme_name))
+        self._render_markdown(self.raw_view.toPlainText())
         self.table_view.viewport().update()
 
     def closeEvent(self, event) -> None:
@@ -435,21 +545,18 @@ class MainWindow(QMainWindow):
         visible UI updates immediately, with no restart required."""
         self.setWindowTitle(tr("window.title"))
         self.drop_zone.retranslate()
-        self.remove_btn.setText(tr("button.remove_selected"))
+        self.add_files_btn.setText(tr("button.add_files"))
         self.clear_btn.setText(tr("button.clear_all"))
         self.open_file_btn.setText(tr("button.open_file"))
         self.reveal_btn.setText(tr("button.open_folder"))
         self.retry_header_btn.setText(tr("menu.retry"))
+        self.more_btn.setText(tr("button.more"))
+        self.drag_overlay.setText(tr("overlay.drop"))
 
-        self.preview_empty_title.setText(tr("preview.empty"))
-        self.preview_empty_hint.setText(tr("preview.empty.hint"))
         self.tabs.setTabText(0, tr("tab.rendered"))
         self.tabs.setTabText(1, tr("tab.raw"))
         self.raw_view.setPlaceholderText(tr("raw.placeholder"))
-        self.autosave_note.setText(tr("note.autosave"))
-        self.save_md_btn.setText(tr("button.save_copy_as"))
-        self.export_all_btn.setText(tr("button.export_all_to"))
-        self.copy_btn.setText(tr("button.copy_raw"))
+        self._restore_copy_label()
 
         self.file_menu.setTitle(tr("menu.file"))
         self.edit_menu.setTitle(tr("menu.edit"))
@@ -459,9 +566,15 @@ class MainWindow(QMainWindow):
             self.add_files_action,
             self.add_folder_action,
             self.add_url_action,
+            self.open_file_action,
+            self.reveal_action,
             self.save_copy_action,
             self.export_all_action,
             self.exit_action,
+            self.copy_action,
+            self.retry_action,
+            self.remove_action,
+            self.clear_action,
             self.advanced_settings_action,
             self.about_action,
             self.github_action,
@@ -603,46 +716,131 @@ class MainWindow(QMainWindow):
         item = self.model.item_at(row)
         self._update_preview_header(item)
         if item is None:
-            self._show_preview_empty(tr("preview.empty"), tr("preview.empty.hint"))
+            self._show_preview_empty("", tr("preview.empty.hint"))
             return
         if item.status == ItemStatus.CONVERTING:
-            self._show_preview_empty(tr("preview.converting"), item.display_name)
+            self._show_preview_empty("", tr("preview.converting.hint"))
             return
         if item.status == ItemStatus.PENDING:
-            self._show_preview_empty(tr("preview.pending"), item.display_name)
+            self._show_preview_empty("", tr("preview.pending.hint"))
             return
         if item.status == ItemStatus.ERROR:
-            self._show_preview_empty(tr("preview.failed"), item.error_message or tr("status.error"))
+            self._show_preview_empty("", tr("preview.failed.hint"))
             return
         if item.markdown_result:
             self._show_item_preview(item)
             return
-        self._show_preview_empty(tr("preview.empty"), tr("preview.empty.hint"))
+        self._show_preview_empty("", tr("preview.no_text"))
 
     def _update_preview_header(self, item: QueueItem | None) -> None:
         self._preview_item = item
+        self._refresh_action_states(item)
         if item is None:
             self.preview_header.setVisible(False)
             return
         self.preview_header.setVisible(True)
-        self.preview_header_name.setText(item.display_name)
+        self.preview_header_name.setToolTip(item.source)
+        self._fit_preview_title()
         state = item.display_state
         key, kind = _HEADER_STATUS[state]
-        message = item.error_message if state == DisplayState.ERROR else ""
-        self.preview_header_status.setText(message or tr(key))
+        if state == DisplayState.SAVE_FAILED:
+            status = tr("status.save_failed_detail", error=_brief_error(item.save_error))
+        elif state == DisplayState.ERROR:
+            status = _brief_error(item.error_message) or tr(key)
+        else:
+            status = tr(key)
+        self.preview_header_status.setText(status)
+        self.preview_header_status.setToolTip(self._status_detail(item))
         self.preview_header_status.setProperty("kind", kind)
         self.preview_header_status.style().unpolish(self.preview_header_status)
         self.preview_header_status.style().polish(self.preview_header_status)
+
         saved = state == DisplayState.SAVED
+        retry = state in (DisplayState.ERROR, DisplayState.SAVE_FAILED)
+        copy = self._has_result(item)
         self.open_file_btn.setVisible(saved)
         self.reveal_btn.setVisible(saved)
-        self.retry_header_btn.setVisible(state in (DisplayState.ERROR, DisplayState.SAVE_FAILED))
+        self.retry_header_btn.setVisible(retry)
+        self.copy_btn.setVisible(copy)
+        self._set_primary(self._primary_button(retry, copy, saved))
+
+    def _primary_button(self, retry: bool, copy: bool, saved: bool) -> QPushButton | None:
+        """The one thing to do next, or nothing while there is only waiting."""
+        if retry:
+            return self.retry_header_btn
+        if copy:
+            return self.copy_btn
+        if saved:
+            return self.open_file_btn
+        return None
+
+    def _set_primary(self, primary: QPushButton | None) -> None:
+        for button in (self.retry_header_btn, self.copy_btn, self.open_file_btn, self.reveal_btn):
+            set_tier(button, "primary" if button is primary else "quiet")
+
+    @staticmethod
+    def _has_result(item: QueueItem | None) -> bool:
+        return (
+            item is not None
+            and item.status == ItemStatus.DONE
+            and bool(item.markdown_result)
+        )
+
+    def _status_detail(self, item: QueueItem) -> str:
+        state = item.display_state
+        if state == DisplayState.ERROR:
+            return item.error_message
+        if state == DisplayState.SAVED:
+            return item.saved_path
+        if state == DisplayState.SAVE_FAILED:
+            return tr("tooltip.save_failed", error=item.save_error)
+        return ""
+
+    def _refresh_action_states(self, item: QueueItem | None) -> None:
+        """Menu actions follow the selected item, whichever menu they sit in."""
+        state = item.display_state if item is not None else None
+        result = self._has_result(item)
+        saved = state == DisplayState.SAVED
+        self.copy_action.setEnabled(result)
+        self.save_copy_action.setEnabled(result)
+        self.open_file_action.setEnabled(saved)
+        self.reveal_action.setEnabled(saved)
+        self.retry_action.setEnabled(state in (DisplayState.ERROR, DisplayState.SAVE_FAILED))
+        self.remove_action.setEnabled(item is not None)
+
+    def _fit_preview_title(self) -> None:
+        """Middle-elide the title so the extension survives a narrow pane."""
+        if self._preview_item is None:
+            return
+        label = self.preview_header_name
+        label.ensurePolished()
+        available = self.preview_panel.width() - 2 * _PANE_MARGIN
+        label.setText(
+            label.fontMetrics().elidedText(
+                self._preview_item.display_name,
+                Qt.TextElideMode.ElideMiddle,
+                max(available, 1),
+            )
+        )
 
     def _show_preview_empty(self, title: str, hint: str) -> None:
         self.preview_empty_title.setText(title)
+        self.preview_empty_title.setVisible(bool(title))
         self.preview_empty_hint.setText(hint)
         self.preview_empty.setVisible(True)
         self.preview_body.setVisible(False)
+
+    def _sync_spinner(self, *args) -> None:
+        """Tick only while something the person started is actually converting."""
+        converting = any(item.status == ItemStatus.CONVERTING for item in self.model.items())
+        if converting and not self._spinner.isActive() and QApplication.isEffectEnabled(Qt.UIEffect.UI_General):
+            self._spinner.start()
+        elif not converting and self._spinner.isActive():
+            self._spinner.stop()
+
+    def _advance_spinner(self) -> None:
+        self.queue_delegate.advance_spinner()
+        self.table_view.viewport().update()
 
     def _on_row_double_clicked(self, index) -> None:
         item = self.model.item_at(index.row())
@@ -768,6 +966,12 @@ class MainWindow(QMainWindow):
             return
         QApplication.clipboard().setText(text)
         self.status_bar.showMessage(tr("status.copied_raw"), 3000)
+        self.copy_btn.setText(tr("button.copied"))
+        self._copy_feedback.start()
+
+    def _restore_copy_label(self) -> None:
+        self._copy_feedback.stop()
+        self.copy_btn.setText(tr("button.copy_raw"))
 
     def _show_about(self) -> None:
         AboutDialog(self).exec()

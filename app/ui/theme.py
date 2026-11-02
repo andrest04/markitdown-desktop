@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PySide6.QtGui import QColor, QFont, QPalette
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QPushButton
 
 FONT_UI = (
     '"Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", '
@@ -19,16 +19,10 @@ FONT_UI = (
     '"Noto Sans", "DejaVu Sans", sans-serif'
 )
 # Raw Markdown only: there the monospace is the content, not a decoration.
-MONO_FAMILIES = (
-    "Cascadia Mono",
-    "Cascadia Code",
-    "Consolas",
-    "SF Mono",
-    "Menlo",
-    "Ubuntu Mono",
-    "DejaVu Sans Mono",
+FONT_MONO = (
+    '"Cascadia Mono", "Cascadia Code", "Consolas", "SF Mono", "Menlo", '
+    '"Ubuntu Mono", "DejaVu Sans Mono", monospace'
 )
-FONT_MONO = ", ".join(f'"{family}"' for family in MONO_FAMILIES) + ", monospace"
 
 # Rendered Markdown stops growing at a comfortable reading measure.
 READING_WIDTH = 720
@@ -95,6 +89,15 @@ DARK = Tokens(
 
 def tokens_for(theme_name: str) -> Tokens:
     return DARK if theme_name == "dark" else LIGHT
+
+
+def set_tier(button: QPushButton, tier: str) -> None:
+    """Set a button's emphasis: "primary", "quiet" or "ghost"; restyles it live."""
+    if button.property("tier") == tier:
+        return
+    button.setProperty("tier", tier)
+    button.style().unpolish(button)
+    button.style().polish(button)
 
 
 def apply_fusion_palette(app: QApplication, theme_name: str) -> None:
@@ -187,10 +190,6 @@ QPushButton:disabled {{
     background-color: transparent;
     color: {t.muted};
 }}
-QPushButton::menu-indicator {{
-    image: none;
-    width: 0;
-}}
 
 QPushButton[tier="primary"], QDialogButtonBox QPushButton:default {{
     background-color: {t.ink};
@@ -255,12 +254,14 @@ QLineEdit:disabled {{
 QPlainTextEdit, QTextBrowser {{
     background-color: {t.paper};
     border: 2px solid transparent;
-    padding: 14px 22px;
     selection-background-color: {t.mark};
     selection-color: {t.on_mark};
 }}
 QPlainTextEdit:focus, QTextBrowser:focus {{
     border-color: {t.ink};
+}}
+QPlainTextEdit {{
+    font-family: {FONT_MONO};
 }}
 
 QTableView#QueueView {{
@@ -321,7 +322,7 @@ QStatusBar::item {{
 
 QScrollBar:vertical {{
     background: transparent;
-    width: 10px;
+    width: 8px;
     margin: 0 1px;
 }}
 QScrollBar::handle:vertical {{
@@ -338,7 +339,7 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
 }}
 QScrollBar:horizontal {{
     background: transparent;
-    height: 10px;
+    height: 8px;
     margin: 1px 0;
 }}
 QScrollBar::handle:horizontal {{
@@ -455,6 +456,14 @@ def document_css_for(theme_name: str) -> str:
     return f"""
 a {{ color: {t.ink}; text-decoration: underline; }}
 h1, h2, h3, h4 {{ color: {t.ink}; font-weight: 600; }}
+h1 {{ font-size: 22px; margin-top: 4px; margin-bottom: 8px; }}
+h2 {{ font-size: 17px; margin-top: 16px; margin-bottom: 6px; }}
+h3 {{ font-size: 14px; margin-top: 12px; margin-bottom: 4px; }}
+p {{ margin-bottom: 10px; line-height: 140%; }}
+ul, ol {{ margin-bottom: 10px; }}
 code, pre {{ font-family: {FONT_MONO}; background-color: {t.desk}; }}
-th {{ font-weight: 600; }}
+blockquote {{ color: {t.muted}; margin-left: 16px; }}
+table {{ border-collapse: collapse; margin-bottom: 10px; }}
+th {{ font-weight: 600; text-align: left; }}
+th, td {{ padding: 4px 16px 4px 0; border-bottom: 1px solid {t.rule}; }}
 """
