@@ -211,8 +211,9 @@ Qt's `styleHints().colorScheme()`: the app palette cannot answer, because
 - `ci.yml` — on every push/PR to `main`: `ruff check .`, `python -m
   compileall`, the headless smoke test above, and `python -m unittest discover
   -s tests`, matrixed across windows-latest/macos-latest/ubuntu-latest. On
-  Linux, `tests/shutdown_refcount_probe.py` runs first: a temporary diagnostic
-  for the suite's abort at interpreter exit (`bool_dealloc`).
+  Linux, `tests/shutdown_refcount_probe.py` runs after the suite, even when it
+  fails, and cannot change the job's result: a temporary diagnostic for the
+  suite's abort at interpreter exit (`bool_dealloc`).
 - `release.yml` — on any `vX.Y.Z` tag push: builds a PyInstaller
   `--onedir --windowed` bundle per OS (`--collect-all markitdown
   --collect-all magika`, needed because both do dynamic/plugin-style

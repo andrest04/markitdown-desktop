@@ -48,15 +48,18 @@ jobs:
         run: |
           python -c "from app.ui.main_window import MainWindow; from PySide6.QtWidgets import QApplication; app = QApplication([]); w = MainWindow(); w.show(); print('MainWindow built OK')"
 
-      # Measures how close each test module brings True to deallocation, since the
-      # suite aborts at exit on Linux only (bool_dealloc). Remove once that is understood.
-      - name: Shutdown refcount probe (Linux, always exits 0)
-        if: runner.os == 'Linux'
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: python tests/shutdown_refcount_probe.py
-
       - name: Run the test suite
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m unittest discover -s tests
+
+      # Measures how close each test module brings True to deallocation, since the
+      # suite aborts at exit on Linux only (bool_dealloc). Runs after the suite, even
+      # when it fails, and cannot change the job's result. Remove once that is understood.
+      - name: Shutdown refcount probe (Linux, cannot fail the job)
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        continue-on-error: true
+        timeout-minutes: 30
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python tests/shutdown_refcount_probe.py
