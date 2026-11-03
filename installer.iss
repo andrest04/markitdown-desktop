@@ -36,6 +36,7 @@ PrivilegesRequired=lowest
 OutputDir=dist-installer
 OutputBaseFilename=markitdown-desktop-setup
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=assets\icon.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
