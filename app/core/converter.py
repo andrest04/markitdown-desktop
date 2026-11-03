@@ -229,11 +229,23 @@ class ConversionOptions:
         return MarkItDown(**kwargs)
 
 
+class NoTextFound(Exception):
+    """A conversion succeeded and produced nothing but whitespace.
+
+    markitdown raises nothing for this, which is what happens to a damaged `.png`
+    and also to a sound one holding no extractable text, so it says nothing about
+    the file's health. It carries no message: the interface translates the reason.
+    """
+
+
 def convert_item(item: QueueItem, options: ConversionOptions) -> str:
     """Run an actual MarkItDown conversion for a single queue item.
 
     Kept independent of Qt so it can be exercised directly (e.g. in tests
     or a smoke-test script) without a QApplication/thread pool.
+
+    Raises NoTextFound rather than returning text with nothing in it, so no
+    caller ends up writing an empty `.md`.
     """
     md = options.build_markitdown()
 
@@ -257,7 +269,10 @@ def convert_item(item: QueueItem, options: ConversionOptions) -> str:
     else:
         result = md.convert_local(item.source, stream_info=stream_info, **convert_kwargs)
 
-    return result.text_content
+    text = result.text_content
+    if not (text or "").strip():
+        raise NoTextFound()
+    return text
 
 
 # Every one of these is an OSError, or an IOError in the case of requests, so
@@ -310,6 +325,8 @@ def _classify_attempts(error: FileConversionException) -> FailureReason:
 
 def classify_conversion_error(error: Exception) -> FailureReason:
     """Sort what `convert_item` raised into a reason the interface can translate."""
+    if isinstance(error, NoTextFound):
+        return FailureReason.NO_TEXT
     if isinstance(error, UnsupportedFormatException):
         return FailureReason.UNSUPPORTED_FORMAT
     if isinstance(error, MissingDependencyException):

@@ -5,7 +5,7 @@ import unittest
 from unittest import mock
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAccessible, QHelpEvent, QKeySequence
+from PySide6.QtGui import QAccessible, QHelpEvent, QKeySequence, QTextCursor
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QStyleOptionViewItem
 from qt_support import WindowTestCase, process_events, pump_until
@@ -133,6 +133,56 @@ class KeyboardRetryTests(RowTestCase):
 
         rect = retry_rect(QRect(0, 0, 340, ROW_HEIGHT), failed())
         self.assertEqual((rect.width(), rect.height()), (76, 26))
+
+
+class DeleteKeyTests(RowTestCase):
+    """Delete removes rows only from the list. Elsewhere it belongs to whatever has focus."""
+
+    def setUp(self):
+        super().setUp()
+        self.add(saved("a.txt"), saved("b.txt"))
+        self.window.table_view.selectRow(0)
+        process_events()
+
+    def _delete_in(self, widget):
+        self.window.activateWindow()
+        widget.setFocus()
+        process_events()
+        if QApplication.focusWidget() is not widget:
+            self.skipTest("this platform plugin gives the window no focus")
+        QTest.keyClick(widget, Qt.Key.Key_Delete)
+        process_events()
+
+    def test_it_removes_the_selected_row_from_the_list(self):
+        self._delete_in(self.window.table_view)
+        self.assertEqual([item.display_name for item in self.window.model.items()], ["b.txt"])
+
+    def test_it_edits_the_link_field(self):
+        field = self.window.url_edit
+        field.setText("abc")
+        field.setCursorPosition(0)
+        self._delete_in(field)
+        self.assertEqual(field.text(), "bc")
+        self.assertEqual(self.window.model.rowCount(), 2)
+
+    def test_it_edits_the_markdown_tab(self):
+        window = self.window
+        window.tabs.setCurrentWidget(window.raw_view)
+        window.preview_body.setVisible(True)
+        process_events()
+        window.raw_view.setPlainText("abc")
+        window.raw_view.moveCursor(QTextCursor.MoveOperation.Start)
+        self._delete_in(window.raw_view)
+        self.assertEqual(window.raw_view.toPlainText(), "bc")
+        self.assertEqual(window.model.rowCount(), 2)
+
+    def test_it_does_nothing_on_a_button(self):
+        self._delete_in(self.window.add_files_btn)
+        self.assertEqual(self.window.model.rowCount(), 2)
+
+    def test_the_menus_still_remove_the_selected_row(self):
+        self.window.remove_action.trigger()
+        self.assertEqual([item.display_name for item in self.window.model.items()], ["b.txt"])
 
 
 class AccessibleTextTests(RowTestCase):

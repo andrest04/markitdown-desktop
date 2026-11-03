@@ -107,6 +107,9 @@ class ConversionQueue(QObject):
             self._model.refresh_row(row)
             self.item_finished.emit(item)
         self._advance_progress(item)
+        if row >= 0 and item.save_error:
+            # Last, for the same reason as a failed conversion below.
+            self.item_save_failed.emit(item, item.save_error)
 
     @Slot(object, object, str)
     def _on_failed(self, item: QueueItem, reason: FailureReason, message: str) -> None:
@@ -128,7 +131,6 @@ class ConversionQueue(QObject):
             saved_path = auto_save_markdown(item, item.markdown_result or "", self._downloads_dir)
         except OSError as exc:
             item.mark_save_failed(str(exc), classify_save_error(exc))
-            self.item_save_failed.emit(item, str(exc))
         else:
             item.mark_saved(str(saved_path))
             self.item_saved.emit(item, str(saved_path))

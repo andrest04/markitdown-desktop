@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import errno
 import socket
+import struct
 import sys
 import tempfile
 import threading
@@ -50,6 +51,10 @@ def _file_item(path: Path) -> QueueItem:
 
 def _url_item(url: str) -> QueueItem:
     return QueueItem(source=url, kind=SourceKind.URL, display_name=url)
+
+
+def _png_chunk(kind: bytes, data: bytes) -> bytes:
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
 
 
 class RealConversionFailureTests(unittest.TestCase):
@@ -95,6 +100,27 @@ class RealConversionFailureTests(unittest.TestCase):
         ):
             with self.subTest(name=name):
                 self.assertIs(self.reason_for(self.write(name, data)), FailureReason.UNREADABLE_FILE)
+
+    def test_output_with_no_text_is_a_failure_of_its_own(self):
+        # markitdown raises nothing for any of these: it returns empty text.
+        header = struct.pack(">IIBBBBB", 1, 1, 8, 0, 0, 0, 0)
+        valid_png = (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_chunk(b"IHDR", header)
+            + _png_chunk(b"IDAT", zlib.compress(b"\0\0"))
+            + _png_chunk(b"IEND", b"")
+        )
+        for name, data in (
+            ("garbage.png", b"this is not an image"),
+            ("blank.png", valid_png),
+            ("empty.txt", b""),
+            ("spaces.txt", b"  \n\t\r\n  "),
+        ):
+            with self.subTest(name=name):
+                self.assertIs(self.reason_for(self.write(name, data)), FailureReason.NO_TEXT)
+
+    def test_output_with_text_comes_back(self):
+        self.assertIn("hello", convert_item(self.write("a.txt", b"hello"), ConversionOptions()))
 
     def _pcm_wav(self, name: str) -> QueueItem:
         path = self.folder / name
@@ -285,6 +311,14 @@ class TextTests(unittest.TestCase):
                 english, spanish = (TRANSLATIONS[lang][reason.value] for lang in (LANG_EN, LANG_ES))
                 self.assertNotEqual(english, spanish)
 
+    def test_no_text_says_what_happened_without_blaming_the_file(self):
+        item = self._failed(FailureReason.NO_TEXT, "")
+        self.assertEqual(row_status_text(item), "Failed: no text found")
+        self.assertEqual(detail_status(item), "No text found")
+        i18n_manager._language = LANG_ES
+        self.assertEqual(row_status_text(item), "Falló: no se encontró texto")
+        self.assertEqual(detail_status(item), "No se encontró texto")
+
     def test_the_row_and_header_name_the_reason_in_the_interface_language(self):
         item = self._failed()
         self.assertEqual(row_status_text(item), "Failed: damaged or unreadable file")
@@ -384,6 +418,42 @@ class WindowTests(WindowTestCase):
 
         self.assertEqual(message, tr("status.autosave_failed", error="disco lleno"))
         self.assertNotIn("No space left", message)
+
+    def _convert_for_real(self):
+        return mock.patch("app.core.converter.convert_item", convert_item)
+
+    def test_a_document_with_no_text_fails_and_writes_nothing(self):
+        source = self.make_source("blank.txt")
+        Path(source).write_text(" \n ", encoding="utf-8")
+        with self._convert_for_real():
+            self.window._add_paths([source])
+            self.assertTrue(pump_until(lambda: self.item_named("blank.txt").status == ItemStatus.ERROR))
+            settle()
+        item = self.item_named("blank.txt")
+        self.assertIs(item.error_reason, FailureReason.NO_TEXT)
+        self.assertEqual(self.downloaded_names(), [])
+        self.window.table_view.selectRow(0)
+        process_events()
+        self.assertEqual(self.window.preview_header_status.text(), "No text found")
+        self.assertFalse(self.window.retry_header_btn.isHidden())
+
+    def test_a_retry_that_finds_no_text_keeps_the_earlier_file(self):
+        source = self.make_source("a.txt")
+        with self._convert_for_real():
+            self.window._add_paths([source])
+            self.assertTrue(pump_until(lambda: self.item_named("a.txt").saved_path))
+            settle()
+            item = self.item_named("a.txt")
+            saved_path = item.saved_path
+
+            Path(source).write_text("", encoding="utf-8")
+            self.window._start_conversion([0])
+            self.assertTrue(pump_until(lambda: item.status == ItemStatus.ERROR))
+            settle()
+
+        self.assertIs(item.error_reason, FailureReason.NO_TEXT)
+        self.assertEqual(item.saved_path, saved_path)
+        self.assertEqual(self.downloaded_names(), ["a.md"])
 
     def test_save_copy_failure_gives_the_reason_in_the_interface_language(self):
         self.add_sources("a.txt")

@@ -656,7 +656,11 @@ class MainWindow(QMainWindow):
         self._sync_language_buttons()
 
     def _install_shortcuts(self) -> None:
-        QShortcut(QKeySequence.StandardKey.Delete, self.table_view, self.action_remove_selected)
+        # Only while the list has focus: a button keeps its key to itself, and the
+        # text fields already keep Delete from a window shortcut.
+        remove_shortcut = QShortcut(QKeySequence.StandardKey.Delete, self.table_view, self.action_remove_selected)
+        # Set apart: PySide6 ignores a `context=` argument given to this constructor.
+        remove_shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
         # The pane reads top to bottom, and so does the keyboard.
         zone = self.drop_zone
         for first, second in (
@@ -899,7 +903,12 @@ class MainWindow(QMainWindow):
         self.progress_bar.raise_()
 
     def _on_batch_finished(self) -> None:
-        self.status_bar.showMessage(tr("status.batch_complete"), 4000)
+        # A failure on the last item running reports after this, so it stays on screen.
+        summary = queue_summary(self.model.items())
+        if summary is not None and summary.attention:
+            self.status_bar.showMessage(tr("status.batch_complete_problems", summary=summary.headline), 6000)
+        else:
+            self.status_bar.showMessage(tr("status.batch_complete"), 4000)
         self.progress_bar.setVisible(False)
 
     def _selected_row(self) -> int:

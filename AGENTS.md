@@ -15,7 +15,9 @@ Core UX contract (do not break when changing things): **drop a file,
 paste a URL, or click to browse → conversion starts immediately → the
 resulting `.md` is auto-saved to `~/Downloads` with no export step.**
 Everything else (preview tabs, "save a copy elsewhere", advanced Azure
-settings) is secondary and must stay out of that primary path.
+settings) is secondary and must stay out of that primary path. The one
+exception: output with no text is a failure with its own reason, never an
+empty `.md`.
 
 ## Commands
 
@@ -84,7 +86,8 @@ nothing test-related should be left in the user's actual Downloads folder.
   `ConversionOptions.build_markitdown()` maps the
   GUI's option toggles to real `MarkItDown(...)` constructor kwargs
   (`enable_plugins`, `docintel_endpoint`, `cu_endpoint`, `cu_analyzer_id`).
-  `convert_item()` maps per-item extension/mimetype/charset overrides to a
+  `convert_item()` raises `NoTextFound` on whitespace-only output, which
+  markitdown does not, and maps per-item extension/mimetype/charset overrides to a
   `StreamInfo` object and calls `convert_local()` or `convert_uri()`
   depending on `SourceKind`. `auto_save_markdown()` / `get_downloads_dir()`
   / `unique_download_path()` implement the Downloads auto-save contract
@@ -138,7 +141,8 @@ nothing test-related should be left in the user's actual Downloads folder.
     Selection is a quiet fill plus a `mark` stroke behind the file name only.
     Rows needing it paint a retry in one fixed column (`retry_rect()`,
     `retry_requested`); Enter on the focused row does the same, from
-    `MainWindow.eventFilter`. This module also holds the pane's tested helpers,
+    `MainWindow.eventFilter`. Delete removes rows only while the list has
+    focus (`WidgetShortcut`). This module also holds the pane's tested helpers,
     `queue_summary()`, `detail_status()`, `row_tooltip()` and `word_count()`.
   - `status_mark.py` — `StatusMark` and `paint_status_glyph()`, one silhouette
     per state, which the delegate paints too.
