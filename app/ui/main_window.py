@@ -51,11 +51,13 @@ from app.core.converter import (
 from app.core.queue_model import (
     COLUMN_STATUS,
     COLUMN_TYPE,
+    RETRY_STATES,
     DisplayState,
     FailureReason,
     ItemStatus,
     QueueItem,
     QueueTableModel,
+    failure_reason_text,
 )
 from app.i18n import LANG_EN, LANG_ES, tr
 from app.i18n import manager as i18n_manager
@@ -63,13 +65,11 @@ from app.ui.about_dialog import AboutDialog
 from app.ui.advanced_settings_dialog import AdvancedSettingsDialog
 from app.ui.drop_zone import EMPTY_GUTTER, DropZone, center_column, empty_column_left
 from app.ui.queue_delegate import (
-    RETRY_STATES,
     ROW_HEIGHT,
     BrandMark,
     QueueItemDelegate,
     StatusMark,
     detail_status,
-    failure_reason_text,
     queue_summary,
 )
 from app.ui.theme import (
@@ -249,6 +249,7 @@ class MainWindow(QMainWindow):
         self.drag_overlay.setVisible(False)
         self.drop_zone.drag_active_changed.connect(self._on_drag_active_changed)
         central.installEventFilter(self)
+        self.table_view.installEventFilter(self)
         self.preview_panel.installEventFilter(self)
         self.rendered_view.viewport().installEventFilter(self)
 
@@ -274,7 +275,23 @@ class MainWindow(QMainWindow):
                 self._fit_preview_title()
             elif watched is self.rendered_view.viewport():
                 self._fit_reading_width()
+        elif (
+            watched is self.table_view
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            and self._retry_focused_row()
+        ):
+            return True
         return super().eventFilter(watched, event)
+
+    def _retry_focused_row(self) -> bool:
+        """The row's Retry, for the keyboard: Enter acts on the row with the focus ring."""
+        row = self.table_view.currentIndex().row()
+        item = self.model.item_at(row)
+        if item is None or item.display_state not in RETRY_STATES:
+            return False
+        self._start_conversion([row])
+        return True
 
     def _on_drag_active_changed(self, active: bool) -> None:
         self.drag_overlay.setGeometry(self.centralWidget().rect())
@@ -322,6 +339,8 @@ class MainWindow(QMainWindow):
         self.table_view.setMouseTracking(True)
         self.table_view.setWordWrap(False)
         self.table_view.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        # Tab moves to the next control; the arrow keys move between rows.
+        self.table_view.setTabKeyNavigation(False)
         self.table_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table_view.customContextMenuRequested.connect(self._show_queue_menu)
         self.table_view.selectionModel().selectionChanged.connect(self._on_selection_changed)
@@ -553,7 +572,8 @@ class MainWindow(QMainWindow):
         self.save_copy_action = self._make_action("menu.save_copy_as", self.action_save_current)
         self.export_all_action = self._make_action("menu.export_all_to", self.action_export_all)
         self.exit_action = self._make_action("menu.exit", self.close)
-        self.exit_action.setShortcut(QKeySequence.StandardKey.Quit)
+        # Not StandardKey.Quit: on Windows that is the literal Exit key, shown as "Exit".
+        self.exit_action.setShortcut(QKeySequence("Ctrl+Q"))
         self.file_menu.addAction(self.add_files_action)
         self.file_menu.addAction(self.add_folder_action)
         self.file_menu.addAction(self.add_url_action)

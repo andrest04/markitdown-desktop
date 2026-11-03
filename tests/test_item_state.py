@@ -4,7 +4,6 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from PySide6.QtCore import Qt
 from qt_support import WindowTestCase, pump_until, settle
 
 from app.core.queue_model import COLUMN_STATUS, ItemStatus, QueueItem, SourceKind
@@ -19,52 +18,52 @@ SAVED_PATH = "/somewhere/saved.md"
 MATRIX = [
     {
         "item": (ItemStatus.PENDING, "", ""),
-        "text": "status.pending", "tooltip": None,
+        "text": "status.pending",
         "color": "muted",
         "header": "preview.pending", "kind": "pending", "open": False, "retry": False,
     },
     {
         "item": (ItemStatus.CONVERTING, "", ""),
-        "text": "status.converting", "tooltip": None,
+        "text": "status.converting",
         "color": "muted",
         "header": "preview.converting", "kind": "converting", "open": False, "retry": False,
     },
     {
         # A retry of an item that was saved earlier.
         "item": (ItemStatus.CONVERTING, SAVED_PATH, ""),
-        "text": "status.converting", "tooltip": None,
+        "text": "status.converting",
         "color": "muted",
         "header": "preview.converting", "kind": "converting", "open": False, "retry": False,
     },
     {
         "item": (ItemStatus.DONE, SAVED_PATH, ""),
-        "text": "status.done_saved", "tooltip": tr("tooltip.saved_to", path=SAVED_PATH),
+        "text": "status.done_saved",
         "color": "muted",
         "header": None, "header_text": tr("status.saved_as", name="saved.md"), "kind": "saved", "open": True, "retry": False,
     },
     {
         "item": (ItemStatus.DONE, "", "disk full"),
-        "text": "status.done_save_failed", "tooltip": tr("tooltip.save_failed", error="disk full"),
+        "text": "status.done_save_failed",
         "color": "danger",
         "header": None, "header_text": tr("status.save_failed_detail", error=tr("error.save_generic")), "kind": "error", "open": False, "retry": True,
     },
     {
         # Transient: converted, auto-save has not reported yet.
         "item": (ItemStatus.DONE, "", ""),
-        "text": "status.done", "tooltip": None,
+        "text": "status.done",
         "color": "muted",
         "header": "status.done", "kind": "pending", "open": False, "retry": False,
     },
     {
         "item": (ItemStatus.ERROR, "", ""),
-        "text": "status.error", "tooltip": "boom",
+        "text": "status.error",
         "color": "danger",
         "header": None, "kind": "error", "open": False, "retry": True,
     },
     {
         # A failed retry: the earlier file still exists, but the item shows failed.
         "item": (ItemStatus.ERROR, SAVED_PATH, ""),
-        "text": "status.error", "tooltip": "boom",
+        "text": "status.error",
         "color": "danger",
         "header": None, "kind": "error", "open": False, "retry": True,
     },
@@ -86,17 +85,13 @@ def make_item(status, saved_path, save_error) -> QueueItem:
 class ConsumerMatrixTests(WindowTestCase):
     """Characterization: the model, delegate and preview header for every state."""
 
-    def test_model_status_text_and_tooltip(self):
+    def test_model_status_text(self):
         for case in MATRIX:
             with self.subTest(item=case["item"]):
                 self.window.model.clear()
                 self.window.model.add_item(make_item(*case["item"]))
                 index = self.window.model.index(0, COLUMN_STATUS)
                 self.assertEqual(self.window.model.data(index), tr(case["text"]))
-                self.assertEqual(
-                    self.window.model.data(index, Qt.ItemDataRole.ToolTipRole),
-                    case["tooltip"],
-                )
 
     def test_delegate_parts(self):
         delegate = QueueItemDelegate()

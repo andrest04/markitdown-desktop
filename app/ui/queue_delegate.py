@@ -23,11 +23,13 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.queue_model import (
+    RETRY_STATES,
     DisplayState,
-    FailureReason,
     QueueItem,
     QueueTableModel,
     SourceKind,
+    failure_reason_text,
+    row_status_text,
 )
 from app.i18n import LANG_ES, tr
 from app.i18n import manager as i18n_manager
@@ -46,8 +48,7 @@ _STROKE_OVERHANG = 3
 # One fixed column, wide enough for the label in every language.
 _ACTION_WIDTH = 76
 _ACTION_HEIGHT = 26
-
-RETRY_STATES = {DisplayState.ERROR, DisplayState.SAVE_FAILED}
+_TOOLTIP_DETAIL_CHARS = 600
 
 
 @dataclass(frozen=True)
@@ -76,21 +77,16 @@ def current_tokens() -> Tokens:
     return tokens_for((app.property("themeName") if app is not None else None) or "light")
 
 
-def failure_reason_text(item: QueueItem) -> str:
-    """A failed item's reason in the current language, or "" when nothing is known."""
-    if item.error_reason == FailureReason.GENERIC and not item.error_message.strip():
-        return ""
-    return tr(item.error_reason.value)
-
-
-def row_status_text(item: QueueItem) -> str:
-    """A row's status line. A problem names its reason where it is first seen."""
+def row_tooltip(item: QueueItem) -> str:
+    """What a problem row cannot fit: its whole reason, the raw text, and the key."""
     state = item.display_state
-    if state == DisplayState.ERROR and failure_reason_text(item):
-        return tr("status.failed_reason", reason=failure_reason_text(item))
-    if state == DisplayState.SAVE_FAILED:
-        return tr("status.not_saved_reason", reason=tr(item.save_error_reason.value))
-    return tr(state.value)
+    if state not in RETRY_STATES:
+        return ""
+    raw = item.error_message if state == DisplayState.ERROR else item.save_error
+    raw = raw.strip()
+    if len(raw) > _TOOLTIP_DETAIL_CHARS:
+        raw = raw[:_TOOLTIP_DETAIL_CHARS].rstrip() + "…"
+    return "\n".join(part for part in (row_status_text(item), raw, tr("row.retry_hint")) if part)
 
 
 def word_count(markdown: str | None) -> int:
@@ -360,14 +356,12 @@ class QueueItemDelegate(QStyledItemDelegate):
             view.viewport().update(option.rect)
 
     def helpEvent(self, event, view, option, index) -> bool:
-        """A problem row's tooltip is the whole message; the row can only cut it."""
+        """A problem row's tooltip is the whole story; the row can only cut it."""
         model = index.model()
         item = model.item_at(index.row()) if isinstance(model, QueueTableModel) else None
-        if item is not None and item.display_state == DisplayState.ERROR and item.error_message:
-            QToolTip.showText(event.globalPos(), item.error_message, view)
-            return True
-        if item is not None and item.display_state == DisplayState.SAVE_FAILED:
-            QToolTip.showText(event.globalPos(), tr("tooltip.save_failed", error=item.save_error), view)
+        tooltip = row_tooltip(item) if item is not None else ""
+        if tooltip:
+            QToolTip.showText(event.globalPos(), tooltip, view)
             return True
         return super().helpEvent(event, view, option, index)
 

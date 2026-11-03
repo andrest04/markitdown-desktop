@@ -162,6 +162,26 @@ class QueueItem:
         self.save_error_reason = reason
 
 
+RETRY_STATES = {DisplayState.ERROR, DisplayState.SAVE_FAILED}
+
+
+def failure_reason_text(item: QueueItem) -> str:
+    """A failed item's reason in the current language, or "" when nothing is known."""
+    if item.error_reason == FailureReason.GENERIC and not item.error_message.strip():
+        return ""
+    return tr(item.error_reason.value)
+
+
+def row_status_text(item: QueueItem) -> str:
+    """A row's status line. A problem names its reason where it is first seen."""
+    state = item.display_state
+    if state == DisplayState.ERROR and failure_reason_text(item):
+        return tr("status.failed_reason", reason=failure_reason_text(item))
+    if state == DisplayState.SAVE_FAILED:
+        return tr("status.not_saved_reason", reason=tr(item.save_error_reason.value))
+    return tr(state.value)
+
+
 COLUMN_NAME = 0
 COLUMN_TYPE = 1
 COLUMN_STATUS = 2
@@ -210,20 +230,15 @@ class QueueTableModel(QAbstractTableModel):
                 return tr(item.display_state.value)
             return None
 
-        if role == Qt.ItemDataRole.ToolTipRole:
-            if col == COLUMN_STATUS:
-                state = item.display_state
-                if state == DisplayState.ERROR:
-                    return item.error_message
-                if state == DisplayState.SAVED:
-                    return tr("tooltip.saved_to", path=item.saved_path)
-                if state == DisplayState.SAVE_FAILED:
-                    return tr("tooltip.save_failed", error=item.save_error)
-                return None
-            if col == COLUMN_NAME:
-                return item.source
+        if col != COLUMN_NAME:
             return None
-
+        if role == Qt.ItemDataRole.ToolTipRole:
+            return item.source
+        # The delegate paints a row's status, which a screen reader cannot see.
+        if role == Qt.ItemDataRole.AccessibleTextRole:
+            return f"{item.display_source()}, {row_status_text(item)}"
+        if role == Qt.ItemDataRole.AccessibleDescriptionRole and item.display_state in RETRY_STATES:
+            return tr("row.retry_hint")
         return None
 
     # -- Queue management -----------------------------------------------

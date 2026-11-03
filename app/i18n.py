@@ -105,7 +105,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "status.done_saved": "Saved to Downloads",
         "status.done_save_failed": "Converted, not saved",
         "status.save_failed_detail": "Converted, but could not save to Downloads: {error}",
-        "tooltip.saved_to": "Saved to {path}\nDouble-click to open the file.",
         "status.file_missing": "The saved file is no longer in that folder. It may have been moved or deleted.",
         "tooltip.save_failed": "Converted successfully, but auto-save failed: {error}",
 
@@ -178,6 +177,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "summary.all_saved.one": "1 saved to Downloads",
         "summary.all_saved.other": "All {count} saved to Downloads",
         "button.retry_row": "Retry",
+        "row.retry_hint": "Press Enter to retry",
 
         # About dialog
         "about.title": "About MarkItDown Desktop",
@@ -281,7 +281,6 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "status.done_saved": "Guardado en Descargas",
         "status.done_save_failed": "Convertido, sin guardar",
         "status.save_failed_detail": "Convertido, pero no se pudo guardar en Descargas: {error}",
-        "tooltip.saved_to": "Guardado en {path}\nHaga doble clic para abrir el archivo.",
         "status.file_missing": "El archivo guardado ya no está en esa carpeta. Puede haberse movido o eliminado.",
         "tooltip.save_failed": "Convertido correctamente, pero falló el guardado automático: {error}",
 
@@ -354,6 +353,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "summary.all_saved.one": "1 guardado en Descargas",
         "summary.all_saved.other": "Los {count} guardados en Descargas",
         "button.retry_row": "Reintentar",
+        "row.retry_hint": "Pulse Intro para reintentar",
 
         # About dialog
         "about.title": "Acerca de MarkItDown Desktop",
