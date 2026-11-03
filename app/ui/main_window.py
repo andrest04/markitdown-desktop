@@ -107,6 +107,20 @@ _BRAND_MARGINS_FILLED = (12, 14, 14, 10)
 _SUMMARY_HEIGHT = 46
 
 
+def reveal_command(path: str) -> str | list[str]:
+    """The command that shows `path` in the system's file manager, for `Popen`.
+
+    No shell ever sees it, so `%VAR%` and `&` in a file name stay literal. Windows
+    gets one string because `Popen` passes a string to CreateProcess unchanged,
+    and Explorer needs the `/select,"<path>"` quoting that a list would not produce.
+    """
+    if sys.platform.startswith("win"):
+        return f'explorer /select,"{path}"'
+    if sys.platform == "darwin":
+        return ["open", "-R", path]
+    return ["xdg-open", os.path.dirname(path)]
+
+
 def palette_theme() -> str:
     """Light or dark, read from the current QPalette.
 
@@ -1026,12 +1040,7 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(tr("status.file_missing"), 4000)
             return
         try:
-            if sys.platform.startswith("win"):
-                subprocess.Popen(f'explorer /select,"{normalized}"', shell=True)
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", "-R", normalized])
-            else:
-                subprocess.Popen(["xdg-open", os.path.dirname(normalized)])
+            subprocess.Popen(reveal_command(normalized))
         except OSError:
             pass
 
