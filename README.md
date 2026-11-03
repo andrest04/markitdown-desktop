@@ -98,10 +98,9 @@ A zipped Windows build (`markitdown-desktop-windows.zip`) is also available
 on the [releases page](https://github.com/andrest04/markitdown-desktop/releases/latest)
 if you prefer that format.
 
-The latest release, v1.3.0, predates the interface shown above, which is on
-`main` and arrives with the next release. So does a Windows installer
-(`markitdown-desktop-setup.exe`) that installs per-user, with no admin rights,
-and adds a Start Menu shortcut and an uninstaller.
+There is also a Windows installer (`markitdown-desktop-setup.exe`) that installs
+per-user, with no admin rights, and adds a Start Menu shortcut and an
+uninstaller.
 
 ## Requirements (running from source)
 

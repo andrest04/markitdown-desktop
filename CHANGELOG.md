@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-02
+
 ### Added
 
 - App icon: the landing page's mark now identifies the app in the window, the
@@ -75,6 +77,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Dependabot configuration, so no more automatic dependency update branches.
 
+### Known issues
+
+- On Linux, the test suite aborts at interpreter exit under Python 3.11
+  (`bool_dealloc`), the Python version release builds use. The cause is still
+  under investigation, and the Linux build may hit it when closing the app.
+  Files already converted stay saved.
+
 ## [1.3.0] - 2026-08-13
 
 ### Added
@@ -130,7 +139,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "open containing folder" dispatches to `explorer`/`open -R`/`xdg-open`
   per OS.
 
-[Unreleased]: https://github.com/andrest04/markitdown-desktop/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/andrest04/markitdown-desktop/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/andrest04/markitdown-desktop/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/andrest04/markitdown-desktop/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/andrest04/markitdown-desktop/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/andrest04/markitdown-desktop/compare/v1.0.0...v1.1.0
