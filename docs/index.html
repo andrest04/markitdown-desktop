@@ -179,7 +179,17 @@
   .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
-  pre { background: var(--code-bg); color: var(--code-fg); border-radius: 4px; padding: 16px 18px; overflow-x: auto; margin: 0; line-height: 1.6; }
+  .code-block { position: relative; }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  pre { background: var(--code-bg); color: var(--code-fg); border-radius: 4px; padding: 16px 92px 16px 18px; overflow-x: auto; margin: 0; line-height: 1.6; }
+  .copy {
+    position: absolute; top: 10px; right: 10px; min-width: 68px; min-height: 32px; padding: 4px 12px;
+    background: var(--code-bg); color: var(--code-fg); border: 1px solid currentColor; border-radius: 4px;
+    font: inherit; font-size: 0.86rem; font-weight: 600; cursor: pointer;
+  }
+  .copy:hover { background: var(--code-fg); color: var(--code-bg); }
+  .copy:focus-visible { outline: 2px solid var(--code-fg); outline-offset: 2px; }
+  .copy.copied { background: var(--mark); color: var(--on-mark); border-color: var(--mark); }
 
   /* Footer */
   .disclaimer { color: var(--muted); max-width: 44em; margin: 72px 0 0; font-size: 0.94rem; }
@@ -305,17 +315,24 @@
     </div>
 
     <div class="tab-panel active" id="panel-win" role="tabpanel" aria-labelledby="tab-win">
+      <div class="code-block">
 <pre>git clone https://github.com/andrest04/markitdown-desktop.git
 cd markitdown-desktop
 python -m pip install -r requirements.txt
 run.bat</pre>
+        <button class="copy" type="button" data-i18n="install.copy" data-i18n-aria-label="install.copy.win" aria-label="Copy the Windows commands" hidden>Copy</button>
+      </div>
     </div>
     <div class="tab-panel" id="panel-mac" role="tabpanel" aria-labelledby="tab-mac">
+      <div class="code-block">
 <pre>git clone https://github.com/andrest04/markitdown-desktop.git
 cd markitdown-desktop
 python3 -m pip install -r requirements.txt
 ./run.sh</pre>
+        <button class="copy" type="button" data-i18n="install.copy" data-i18n-aria-label="install.copy.mac" aria-label="Copy the macOS and Linux commands" hidden>Copy</button>
+      </div>
     </div>
+    <p class="visually-hidden" id="copyStatus" role="status"></p>
 
     <p class="disclaimer" data-i18n-html="disclaimer.body">This is an independent, community-built app. It is <strong>not</strong> developed, maintained, or endorsed by Microsoft. It wraps the open-source <a href="https://github.com/microsoft/markitdown">markitdown</a> package (MIT License), and all credit for the conversion engine goes to Microsoft and its contributors.</p>
   </section>
@@ -382,6 +399,11 @@ python3 -m pip install -r requirements.txt
       "download.zip.button": "Download .zip",
       "install.source.heading": "Run from source",
       "install.source.note": "For contributors or other platforms. Requires Python 3.10 or newer.",
+      "install.copy": "Copy",
+      "install.copied": "Copied",
+      "install.copyFailed": "Selected",
+      "install.copy.win": "Copy the Windows commands",
+      "install.copy.mac": "Copy the macOS and Linux commands",
       "disclaimer.body": "This is an independent, community-built app. It is <strong>not</strong> developed, maintained, or endorsed by Microsoft. It wraps the open-source <a href=\"https://github.com/microsoft/markitdown\">markitdown</a> package (MIT License), and all credit for the conversion engine goes to Microsoft and its contributors.",
       "footer.license": "MarkItDown Desktop, MIT License",
       "lang.switchTo": "ES",
@@ -438,6 +460,11 @@ python3 -m pip install -r requirements.txt
       "download.zip.button": "Descargar .zip",
       "install.source.heading": "Ejecutar desde el código fuente",
       "install.source.note": "Para colaboradores u otras plataformas. Requiere Python 3.10 o posterior.",
+      "install.copy": "Copiar",
+      "install.copied": "Copiado",
+      "install.copyFailed": "Seleccionado",
+      "install.copy.win": "Copiar los comandos de Windows",
+      "install.copy.mac": "Copiar los comandos de macOS y Linux",
       "disclaimer.body": "Esta es una aplicación independiente, creada por la comunidad. <strong>No</strong> está desarrollada, mantenida ni respaldada por Microsoft. Envuelve el paquete de código abierto <a href=\"https://github.com/microsoft/markitdown\">markitdown</a> (licencia MIT), y todo el mérito del motor de conversión es de Microsoft y sus colaboradores.",
       "footer.license": "MarkItDown Desktop, licencia MIT",
       "lang.switchTo": "EN",
@@ -528,6 +555,59 @@ python3 -m pip install -r requirements.txt
         e.preventDefault();
         var next = e.key === "ArrowRight" ? (i + 1) % tabs.length : (i - 1 + tabs.length) % tabs.length;
         activateTab(tabs[next], true);
+      });
+    });
+  })();
+
+  (function () {
+    var status = document.getElementById("copyStatus");
+
+    function text(key) {
+      var dict = TRANSLATIONS[document.documentElement.lang] || TRANSLATIONS.en;
+      return dict[key];
+    }
+
+    function legacyCopy(pre) {
+      var range = document.createRange();
+      range.selectNodeContents(pre);
+      var selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      var copied = false;
+      try { copied = document.execCommand("copy"); } catch (e) { /* left selected for the keyboard */ }
+      if (copied) selection.removeAllRanges();
+      return copied;
+    }
+
+    document.querySelectorAll(".copy").forEach(function (button) {
+      var pre = button.parentNode.querySelector("pre");
+      var timer = null;
+      button.hidden = false;
+
+      function show(key, copied) {
+        button.textContent = text(key);
+        button.classList.toggle("copied", copied);
+        status.textContent = text(key);
+        clearTimeout(timer);
+        timer = setTimeout(function () {
+          button.textContent = text("install.copy");
+          button.classList.remove("copied");
+          status.textContent = "";
+        }, 2000);
+      }
+
+      button.addEventListener("click", function () {
+        var done = function () { show("install.copied", true); };
+        // Selecting the text on failure lets the visitor copy it by keyboard.
+        var fallback = function () {
+          if (legacyCopy(pre)) done();
+          else show("install.copyFailed", false);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(pre.textContent).then(done, fallback);
+        } else {
+          fallback();
+        }
       });
     });
   })();
