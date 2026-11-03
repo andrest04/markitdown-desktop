@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -310,7 +311,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(0)
 
         self.drop_zone = DropZone(
-            self._add_paths,
+            self._on_paths_dropped,
             on_click=self.action_add_files,
             on_url=self.action_add_url,
             on_folder=self.action_add_folder,
@@ -794,6 +795,23 @@ class MainWindow(QMainWindow):
         folder = QFileDialog.getExistingDirectory(self, tr("dialog.add_folder"))
         if folder:
             self._add_paths([folder])
+
+    def _on_paths_dropped(self, paths: list[str]) -> None:
+        self._add_paths(paths)
+        self._focus_list_after_drop()
+
+    def _focus_list_after_drop(self) -> None:
+        """Give the list the keyboard, since Delete only works from there.
+
+        A drop arrives from outside the window, so it may find someone typing or
+        a dialog open, and those keep the focus they have.
+        """
+        if QApplication.activeModalWidget() is not None or QApplication.activeWindow() not in (None, self):
+            return
+        if isinstance(self.focusWidget(), (QLineEdit, QPlainTextEdit)):
+            return
+        if self.model.rowCount():
+            self.table_view.setFocus()
 
     def _add_paths(self, paths: list[str]) -> None:
         classified = classify_paths(paths)

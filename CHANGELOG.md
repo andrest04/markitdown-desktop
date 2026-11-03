@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file with a byte order mark.
 - The Delete key removes rows only while the list has focus, so it no longer
   removes one while a button has focus.
+- Delete works right after dropping files, without clicking the row first.
+  A drop leaves focus alone while you type in the link field or a dialog is open.
 - A save failure on the last file running stays in the status bar instead of
   being replaced by "All conversions finished". That message now also counts
   what failed earlier, for example "All conversions finished, 1 failed".
