@@ -94,8 +94,8 @@ class RealConversionFailureTests(unittest.TestCase):
     def test_a_file_with_nothing_visible_has_no_text(self):
         for name, data in (
             ("bom_only.txt", b"\xef\xbb\xbf"),
-            ("zero_width.txt", "​​\n".encode()),
-            ("mixed.txt", "﻿ ​  \t\r\n­".encode()),
+            ("zero_width.txt", "\u200b\u200b\n".encode()),
+            ("mixed.txt", "\ufeff \u200b\u00a0\u2029\t\r\n\u00ad".encode()),
         ):
             with self.subTest(file=name):
                 self.assertIs(self.reason_for(self.write(name, data)), FailureReason.NO_TEXT)
@@ -231,12 +231,12 @@ class VisibleTextTests(unittest.TestCase):
             return convert_item(_file_item(Path("a.txt")), ConversionOptions())
 
     def test_output_with_no_visible_character_is_no_text(self):
-        for text in (None, "", " \n\t", "​", "﻿", "​‍⁠", " 　", "\x00\x1f"):
+        for text in (None, "", " \n\t", "\u200b", "\ufeff", "\u200b\u200d\u2060", "\u00a0\u3000", "\x00\x1f"):
             with self.subTest(text=text), self.assertRaises(NoTextFound):
                 self._convert_returning(text)
 
     def test_any_visible_character_counts_and_comes_back_unchanged(self):
-        for text in ("a", "﻿a", "​1​", "日本語", "\U0001f642", "-"):
+        for text in ("a", "\ufeffa", "\u200b1\u200b", "\u65e5\u672c\u8a9e", "\U0001f642", "-"):
             with self.subTest(text=text):
                 self.assertEqual(self._convert_returning(text), text)
 
