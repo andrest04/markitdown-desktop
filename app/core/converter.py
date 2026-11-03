@@ -59,6 +59,7 @@ warnings.filterwarnings(
     module=r"pydub\.utils",
 )
 
+import shiboken6
 from markitdown import (
     FileConversionException,
     MarkItDown,
@@ -406,9 +407,15 @@ class ConversionWorker(QRunnable):
         A started worker deletes its C++ half on its own thread when it ends,
         so `tryTake` may only see one that has not. The lock is what holds it
         there: `run` cannot begin while this looks.
+
+        A taken worker is the caller's to delete, and PySide does not take that
+        on: it still pins the Python half, and the item with it, for good.
         """
         with self._start_lock:
-            return not self._started and pool.tryTake(self)
+            if self._started or not pool.tryTake(self):
+                return False
+        shiboken6.delete(self)
+        return True
 
     def run(self) -> None:
         with self._start_lock:

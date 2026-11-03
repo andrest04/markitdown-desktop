@@ -2,15 +2,18 @@
 from __future__ import annotations
 
 import ast
+import gc
 import threading
 import unittest
+import weakref
 from pathlib import Path
 from unittest import mock
 
+import shiboken6
 from PySide6.QtCore import QThreadPool
 from qt_support import QtTestCase, pump_until, settle
 
-from app.core.converter import ConversionOptions
+from app.core.converter import ConversionOptions, ConversionWorker
 from app.core.queue_model import ItemStatus, QueueItem, QueueTableModel, SourceKind
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -208,6 +211,31 @@ class RemovedItemTests(ConversionQueueTestCase):
         settle()
         self.assertEqual(self.converter.call_count(), 0)
 
+    def test_a_cancelled_worker_and_its_item_are_released(self):
+        slot_taken, slot_free = threading.Event(), threading.Event()
+        self.addCleanup(slot_free.set)
+
+        def hold_the_slot():
+            slot_taken.set()
+            slot_free.wait(10)
+
+        QThreadPool.globalInstance().start(hold_the_slot)
+        self.assertTrue(slot_taken.wait(5))
+
+        item = make_item("a.txt")
+        self.enqueue(item)
+        worker_alive = weakref.ref(self.queue._in_flight[item])
+        item_alive = weakref.ref(item)
+        self._remove(item)
+        del item
+        gc.collect()
+
+        self.assertIsNone(worker_alive())
+        self.assertIsNone(item_alive())
+        slot_free.set()
+        settle()
+        self.assertEqual(self.converter.call_count(), 0)
+
     def test_a_running_item_keeps_counting_but_stays_silent(self):
         item = make_item("a.txt")
         self.enqueue(item)
@@ -247,6 +275,64 @@ class RemovedItemTests(ConversionQueueTestCase):
         before = list(self.events)
         self._remove(item)
         self.assertEqual(self.events, before)
+
+
+class WorkerCancelTests(QtTestCase):
+    """`tryTake` must never see a started worker, whose C++ half deletes itself."""
+
+    def _worker(self) -> ConversionWorker:
+        return ConversionWorker(make_item("a.txt"), ConversionOptions())
+
+    def test_a_worker_that_started_is_never_offered_to_the_pool(self):
+        worker = self._worker()
+        self.converter.release_all()
+        worker.run()
+
+        pool = mock.Mock()
+        self.assertFalse(worker.take_from(pool))
+        pool.tryTake.assert_not_called()
+        self.assertTrue(shiboken6.isValid(worker))
+
+    def test_a_worker_the_pool_would_not_give_up_stays_alive(self):
+        worker = self._worker()
+        pool = mock.Mock()
+        pool.tryTake.return_value = False
+
+        self.assertFalse(worker.take_from(pool))
+        pool.tryTake.assert_called_once_with(worker)
+        self.assertTrue(shiboken6.isValid(worker))
+
+    def test_a_worker_cannot_start_while_the_pool_is_being_asked(self):
+        worker = self._worker()
+        pool = _PoolThatStartsTheWorkerWhenAsked(self.converter)
+
+        self.assertFalse(worker.take_from(pool))
+        self.assertEqual(pool.conversions_during_the_question, 0)
+
+        self.converter.release_all()
+        pool.thread.join(5)
+        self.assertEqual(self.converter.call_count(), 1)
+
+
+class _PoolThatStartsTheWorkerWhenAsked:
+    """Stages the race: a pool thread reaching `run` during `tryTake`.
+
+    The wait cannot make this flaky. With the lock in place nothing can start
+    however long it lasts; the wait only has to be long enough to catch a run
+    that is not held back.
+    """
+
+    def __init__(self, converter):
+        self.converter = converter
+        self.thread = None
+        self.conversions_during_the_question = None
+
+    def tryTake(self, worker) -> bool:
+        self.thread = threading.Thread(target=worker.run, daemon=True)
+        self.thread.start()
+        self.thread.join(0.2)
+        self.conversions_during_the_question = self.converter.call_count()
+        return False
 
 
 class ThreadingTests(ConversionQueueTestCase):
