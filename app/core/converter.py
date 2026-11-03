@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 import warnings
 from dataclasses import dataclass, field
 from importlib.metadata import PackageNotFoundError
@@ -52,7 +53,7 @@ warnings.filterwarnings(
 )
 
 from markitdown import MarkItDown, StreamInfo
-from PySide6.QtCore import QObject, QRunnable, Signal
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
 from app.core.queue_model import QueueItem, SourceKind
 
@@ -299,8 +300,22 @@ class ConversionWorker(QRunnable):
         self.item = item
         self.options = options
         self.signals = WorkerSignals()
+        self._start_lock = threading.Lock()
+        self._started = False
+
+    def take_from(self, pool: QThreadPool) -> bool:
+        """Pull this worker out of `pool` if it has not started; True if it did.
+
+        A started worker deletes its C++ half on its own thread when it ends,
+        so `tryTake` may only see one that has not. The lock is what holds it
+        there: `run` cannot begin while this looks.
+        """
+        with self._start_lock:
+            return not self._started and pool.tryTake(self)
 
     def run(self) -> None:
+        with self._start_lock:
+            self._started = True
         self.signals.started.emit(self.item)
         try:
             markdown_text = convert_item(self.item, self.options)

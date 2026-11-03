@@ -161,6 +161,66 @@ class FailedRetryTests(WindowTestCase):
         open_file.assert_called_once_with(item.saved_path)
 
 
+class StaleResultTests(WindowTestCase):
+    """An item that is not currently converted has nothing current to save."""
+
+    def _item_saved_then_failed_retry(self):
+        self.add_sources("a.txt")
+        self.converter.release("a.txt")
+        self.assertTrue(pump_until(lambda: self.item_named("a.txt").status == ItemStatus.DONE))
+        settle()
+        item = self.item_named("a.txt")
+        self.converter.failures["a.txt"] = "boom"
+        self.window.table_view.selectRow(0)
+        self.window.action_convert_selected()
+        self.converter.release("a.txt")
+        self.assertTrue(pump_until(lambda: item.status == ItemStatus.ERROR))
+        settle()
+        return item
+
+    def test_saving_a_failed_item_refuses_and_writes_nothing(self):
+        item = self._item_saved_then_failed_retry()
+        self.assertIsNotNone(item.markdown_result, "the stale text is what must not be written")
+        target = self.tmp / "copy.md"
+        with (
+            mock.patch("app.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(target), "")) as dialog,
+            mock.patch("app.ui.main_window.QMessageBox.information") as information,
+        ):
+            self.window.action_save_current()
+        dialog.assert_not_called()
+        information.assert_called_once()
+        self.assertEqual(information.call_args.args[1], tr("msgbox.nothing_to_save.title"))
+        self.assertFalse(target.exists())
+
+    def test_the_action_is_off_in_every_menu_that_holds_it(self):
+        self._item_saved_then_failed_retry()
+        self.assertFalse(self.window.save_copy_action.isEnabled())
+        self.assertIn(self.window.save_copy_action, self.window.file_menu.actions())
+        self.assertIn(self.window.save_copy_action, self.window.more_menu.actions())
+
+    def test_saving_a_retry_in_progress_refuses_too(self):
+        item = self._item_saved_then_failed_retry()
+        del self.converter.failures["a.txt"]
+        self.window.action_convert_selected()
+        self.assertTrue(pump_until(lambda: item.status == ItemStatus.CONVERTING))
+        self.assertFalse(self.window.save_copy_action.isEnabled())
+        with (
+            mock.patch("app.ui.main_window.QFileDialog.getSaveFileName") as dialog,
+            mock.patch("app.ui.main_window.QMessageBox.information"),
+        ):
+            self.window.action_save_current()
+        dialog.assert_not_called()
+
+    def test_saving_works_again_after_a_successful_retry(self):
+        item = self._item_saved_then_failed_retry()
+        del self.converter.failures["a.txt"]
+        self.window.action_convert_selected()
+        self.converter.release("a.txt")
+        self.assertTrue(pump_until(lambda: item.status == ItemStatus.DONE))
+        settle()
+        self.assertTrue(self.window.save_copy_action.isEnabled())
+
+
 class SaveFailureTests(WindowTestCase):
     def test_save_failure_stays_done_with_save_error(self):
         source = self.make_source("a.txt")

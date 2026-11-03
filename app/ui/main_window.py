@@ -107,12 +107,30 @@ _BRAND_MARGINS_FILLED = (12, 14, 14, 10)
 _SUMMARY_HEIGHT = 46
 
 
-def detect_system_theme() -> str:
-    """Best-effort light/dark detection based on the current QPalette."""
+def palette_theme() -> str:
+    """Light or dark, read from the current QPalette.
+
+    Only meaningful before `apply_fusion_palette` replaces that palette with
+    the app's own, which is why the window reads it once, at launch.
+    """
     palette = QGuiApplication.palette()
     window_color = palette.color(palette.ColorRole.Window)
     luminance = 0.299 * window_color.red() + 0.587 * window_color.green() + 0.114 * window_color.blue()
     return "dark" if luminance < 128 else "light"
+
+
+def detect_system_theme(fallback: str = "light") -> str:
+    """Ask the system for light or dark; `fallback` when it has no answer."""
+    # colorScheme() arrived in Qt 6.5, and requirements.txt does not pin Qt.
+    color_scheme = getattr(QGuiApplication.styleHints(), "colorScheme", None)
+    if color_scheme is None:
+        return fallback
+    scheme = color_scheme()
+    if scheme == Qt.ColorScheme.Dark:
+        return "dark"
+    if scheme == Qt.ColorScheme.Light:
+        return "light"
+    return fallback
 
 
 class MainWindow(QMainWindow):
@@ -130,6 +148,7 @@ class MainWindow(QMainWindow):
 
         self._preview_item: QueueItem | None = None
         self._preview_full_width = False
+        self._launch_theme = palette_theme()
 
         self.conversion_options = ConversionOptions()
 
@@ -157,6 +176,7 @@ class MainWindow(QMainWindow):
         self._install_shortcuts()
         self._restore_settings()
         self._apply_theme(self._current_theme_name())
+        self._follow_system_theme_changes()
         self._update_drop_zone_prominence()
         self.centralWidget().setFocus()
 
@@ -621,8 +641,17 @@ class MainWindow(QMainWindow):
 
     def _current_theme_name(self) -> str:
         if self._theme_preference == "system":
-            return detect_system_theme()
+            return detect_system_theme(self._launch_theme)
         return self._theme_preference
+
+    def _follow_system_theme_changes(self) -> None:
+        changed = getattr(QGuiApplication.styleHints(), "colorSchemeChanged", None)
+        if changed is not None:
+            changed.connect(self._on_system_color_scheme_changed)
+
+    def _on_system_color_scheme_changed(self, *args) -> None:
+        if self._theme_preference == "system":
+            self._apply_theme(self._current_theme_name())
 
     def _sync_theme_menu_checks(self) -> None:
         self.theme_system_action.setChecked(self._theme_preference == "system")
@@ -766,11 +795,15 @@ class MainWindow(QMainWindow):
     def action_remove_selected(self) -> None:
         rows = sorted({idx.row() for idx in self.table_view.selectionModel().selectedRows()})
         if rows:
+            items = [self.model.item_at(row) for row in rows]
             self.model.remove_rows(rows)
+            self.conversion_queue.discard(items)
             self._refresh_preview()
 
     def action_clear_all(self) -> None:
+        items = list(self.model.items())
         self.model.clear()
+        self.conversion_queue.discard(items)
         self.raw_view.clear()
         self.rendered_view.clear()
         self._refresh_preview()
@@ -1051,7 +1084,7 @@ class MainWindow(QMainWindow):
     def action_save_current(self) -> None:
         row = self._selected_row()
         item = self.model.item_at(row)
-        if item is None or item.markdown_result is None:
+        if not self._has_result(item):
             QMessageBox.information(self, tr("msgbox.nothing_to_save.title"), tr("msgbox.nothing_to_save.text"))
             return
         default_name = default_basename(item) + ".md"

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import unittest
 
+from PySide6.QtCore import QThreadPool
 from qt_support import WindowTestCase, pump_until, settle
 
 from app.core.queue_model import ItemStatus, QueueItem, SourceKind
@@ -69,6 +70,53 @@ class ItemIdentityTests(WindowTestCase):
         self.assertEqual(self.window.model.items(), [])
         self.assertEqual(self.downloaded_names(), [])
         self.assertFalse(self.progress_state()[2])
+
+    def _one_worker_at_a_time(self) -> None:
+        pool = QThreadPool.globalInstance()
+        previous = pool.maxThreadCount()
+        pool.setMaxThreadCount(1)
+        self.addCleanup(pool.setMaxThreadCount, previous)
+
+    def test_removing_a_queued_row_cancels_its_worker(self):
+        self._one_worker_at_a_time()
+        self.add_sources("a.txt", "b.txt")
+        self.wait_started(1)
+
+        self.window.table_view.selectRow(self.window.model.row_of(self.item_named("b.txt")))
+        self.window.action_remove_selected()
+        self.assertEqual(self.progress_state(), (0, 1, True))
+
+        self.converter.release_all()
+        settle()
+        self.assertEqual(self.converter.call_count("b.txt"), 0)
+        self.assertEqual(self.downloaded_names(), ["a.md"])
+        self.assertFalse(self.progress_state()[2])
+
+    def test_clearing_the_list_cancels_every_queued_worker(self):
+        self._one_worker_at_a_time()
+        self.add_sources("a.txt", "b.txt", "c.txt")
+        self.wait_started(1)
+
+        self.window.action_clear_all()
+        self.assertEqual(self.progress_state(), (0, 1, True))
+
+        self.converter.release_all()
+        settle()
+        self.assertEqual(self.converter.call_count(), 1)
+        self.assertEqual(self.downloaded_names(), [])
+        self.assertFalse(self.progress_state()[2])
+
+    def test_a_removed_items_failure_stays_out_of_the_status_bar(self):
+        self.converter.failures["a.txt"] = "boom"
+        self.add_sources("a.txt", "b.txt")
+        self.wait_started(2)
+
+        self.window.table_view.selectRow(0)
+        self.window.action_remove_selected()
+        self.converter.release("a.txt")
+        pump_until(lambda: self.window.progress_bar.value() == 1)
+
+        self.assertNotIn("boom", self.window.status_bar.currentMessage())
 
     def test_items_with_identical_fields_stay_distinct(self):
         first = QueueItem(source="same", kind=SourceKind.FILE, display_name="same")

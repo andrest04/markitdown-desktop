@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from PySide6.QtCore import QThreadPool
 from qt_support import QtTestCase, pump_until, settle
 
 from app.core.converter import ConversionOptions
@@ -142,6 +143,110 @@ class FlowTests(ConversionQueueTestCase):
         self.converter.release_all()
         settle()
         self.assertIs(self.converter.options_seen[0], options)
+
+
+class RemovedItemTests(ConversionQueueTestCase):
+    """Removing an item cancels what has not started and silences what has."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        pool = QThreadPool.globalInstance()
+        previous = pool.maxThreadCount()
+        pool.setMaxThreadCount(1)
+        self.addCleanup(pool.setMaxThreadCount, previous)
+
+    def _remove(self, *items: QueueItem) -> None:
+        self.model.remove_rows([self.model.row_of(item) for item in items])
+        self.queue.discard(list(items))
+
+    def test_a_queued_worker_never_runs_and_leaves_the_total(self):
+        running, queued = make_item("running.txt"), make_item("queued.txt")
+        self.enqueue(running, queued)
+        pump_until(lambda: self.converter.call_count() == 1)
+
+        self._remove(queued)
+        self.assertEqual(self.events[-1], ("progress", 0, 1))
+
+        self.converter.release_all()
+        settle()
+        self.assertEqual(self.converter.call_count("queued.txt"), 0)
+        self.assertEqual(self.downloaded_names(), ["running.md"])
+        self.assertEqual(self.events[-2:], [("progress", 1, 1), ("batch_finished",)])
+
+    def test_a_queued_item_can_be_cancelled_after_others_completed(self):
+        first, second, third = make_item("a.txt"), make_item("b.txt"), make_item("c.txt")
+        self.enqueue(first, second, third)
+        pump_until(lambda: self.converter.call_count() == 1)
+        self.converter.release("a.txt")
+        pump_until(lambda: ("progress", 1, 3) in self.events and self.converter.call_count() == 2)
+
+        self._remove(third)
+        self.assertEqual(self.events[-1], ("progress", 1, 2))
+
+        self.converter.release_all()
+        settle()
+        self.assertEqual(self.events[-2:], [("progress", 2, 2), ("batch_finished",)])
+
+    def test_cancelling_everything_left_finishes_the_batch(self):
+        # Something else fills the pool's one slot, so nothing of ours can start.
+        slot_taken, slot_free = threading.Event(), threading.Event()
+        self.addCleanup(slot_free.set)
+
+        def hold_the_slot():
+            slot_taken.set()
+            slot_free.wait(10)
+
+        QThreadPool.globalInstance().start(hold_the_slot)
+        self.assertTrue(slot_taken.wait(5))
+
+        item = make_item("a.txt")
+        self.enqueue(item)
+        self._remove(item)
+
+        self.assertEqual(self.events[-1], ("batch_finished",))
+        slot_free.set()
+        settle()
+        self.assertEqual(self.converter.call_count(), 0)
+
+    def test_a_running_item_keeps_counting_but_stays_silent(self):
+        item = make_item("a.txt")
+        self.enqueue(item)
+        pump_until(lambda: self.converter.call_count() == 1)
+
+        self._remove(item)
+        self.converter.release_all()
+        settle()
+
+        self.assertEqual(self.downloaded_names(), [])
+        self.assertNotIn(("saved", "a.txt"), self.events)
+        self.assertNotIn(("finished", "a.txt"), self.events)
+        self.assertEqual(self.events[-2:], [("progress", 1, 1), ("batch_finished",)])
+
+    def test_a_removed_item_that_fails_reports_nothing(self):
+        self.converter.failures["a.txt"] = "boom"
+        item = make_item("a.txt")
+        self.enqueue(item)
+        pump_until(lambda: self.converter.call_count() == 1)
+
+        self._remove(item)
+        self.converter.release_all()
+        settle()
+
+        self.assertFalse([event for event in self.events if event[0] == "failed"])
+        self.assertEqual(self.events[-2:], [("progress", 1, 1), ("batch_finished",)])
+
+    def test_discarding_something_the_queue_never_saw_changes_nothing(self):
+        self.queue.discard([make_item("a.txt")])
+        self.assertEqual(self.events, [])
+
+    def test_a_finished_item_can_be_discarded_safely(self):
+        item = make_item("a.txt")
+        self.enqueue(item)
+        self.converter.release_all()
+        settle()
+        before = list(self.events)
+        self._remove(item)
+        self.assertEqual(self.events, before)
 
 
 class ThreadingTests(ConversionQueueTestCase):
