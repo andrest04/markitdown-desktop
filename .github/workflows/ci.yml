@@ -8,7 +8,7 @@ on:
 
 jobs:
   lint-and-smoke-test:
-    name: Lint, smoke test & tests (${{ matrix.os }})
+    name: Lint & smoke test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
