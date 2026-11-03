@@ -21,7 +21,7 @@ manual "export" step required.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/app-dark-en.png">
-  <img alt="MarkItDown Desktop with five files in its list: three saved to Downloads, one that failed with the reason no text found and a Retry button, one converting. The selected file's Markdown is rendered beside the list." src="docs/screenshots/app-light-en.png">
+  <img alt="MarkItDown Desktop with five files in its list, all saved to Downloads. The selected file's Markdown is rendered beside the list." src="docs/screenshots/app-light-en.png">
 </picture>
 
 **[🌐 Website](https://andrest04.github.io/markitdown-desktop/)** ·
