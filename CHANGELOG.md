@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - App icon: the landing page's mark now identifies the app in the window, the
-  taskbar, the packaged builds, and the Windows installer.
+  taskbar, the Windows `.exe`, and the Windows installer.
 - Copy button on the landing page's run-from-source commands.
 - The window opens small for the empty screen, grows when the first file
   arrives, and goes back when the list is cleared. Your own working size is
