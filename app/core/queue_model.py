@@ -37,6 +37,25 @@ class DisplayState(Enum):
     ERROR = "status.error"
 
 
+class FailureReason(Enum):
+    """Why a conversion or a save failed, as far as the app can tell.
+
+    Values are translation KEYS, for the same reason as ItemStatus: library text
+    cannot be translated, so `converter.py` sorts failures into these and the
+    raw text stays alongside as detail.
+    """
+
+    UNSUPPORTED_FORMAT = "error.unsupported_format"
+    MISSING_DEPENDENCY = "error.missing_dependency"
+    UNREADABLE_FILE = "error.unreadable_file"
+    FILE_NOT_FOUND = "error.file_not_found"
+    PERMISSION_DENIED = "error.permission_denied"
+    NETWORK = "error.network"
+    GENERIC = "error.generic"
+    DISK_FULL = "error.disk_full"
+    SAVE_GENERIC = "error.save_generic"
+
+
 class SourceKind(Enum):
     FILE = "File"
     URL = "URL"
@@ -70,7 +89,8 @@ class QueueItem:
     display_name: str
     detected_type: str = ""
     status: ItemStatus = ItemStatus.PENDING
-    error_message: str = ""
+    error_message: str = ""  # raw library text, for the detail pane
+    error_reason: FailureReason = FailureReason.GENERIC
     markdown_result: str | None = None
     # Per-item conversion overrides (extension/mimetype/charset hints)
     extension_override: str = ""
@@ -78,7 +98,8 @@ class QueueItem:
     charset_override: str = ""
     # Result of the automatic save-to-Downloads step (set after conversion).
     saved_path: str = ""
-    save_error: str = ""
+    save_error: str = ""  # raw OS text
+    save_error_reason: FailureReason = FailureReason.SAVE_GENERIC
 
     @classmethod
     def from_path(cls, path: str) -> QueueItem:
@@ -124,19 +145,21 @@ class QueueItem:
         self.markdown_result = markdown_text
         self.error_message = ""
 
-    def mark_failed(self, message: str) -> None:
+    def mark_failed(self, message: str, reason: FailureReason = FailureReason.GENERIC) -> None:
         """A failed retry keeps `saved_path`: the earlier file still exists."""
         self.status = ItemStatus.ERROR
         self.error_message = message
+        self.error_reason = reason
 
     def mark_saved(self, path: str) -> None:
         self.saved_path = str(path)
         self.save_error = ""
 
-    def mark_save_failed(self, error: str) -> None:
+    def mark_save_failed(self, error: str, reason: FailureReason = FailureReason.SAVE_GENERIC) -> None:
         """The conversion itself succeeded, so the status stays DONE."""
         self.saved_path = ""
         self.save_error = str(error)
+        self.save_error_reason = reason
 
 
 COLUMN_NAME = 0

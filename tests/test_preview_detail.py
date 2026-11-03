@@ -78,11 +78,11 @@ class DetailLineTests(unittest.TestCase):
     def test_a_save_failure_leads_with_the_failure(self):
         self.assertEqual(
             self.line(make_item(save_error="[Errno 28] disk full", result="one")),
-            tr("status.save_failed_detail", error="disk full"),
+            tr("status.save_failed_detail", error=tr("error.save_generic")),
         )
 
     def test_a_failed_item_gives_the_reason_or_falls_back(self):
-        self.assertEqual(self.line(make_item(ItemStatus.ERROR, error="boom")), "boom")
+        self.assertEqual(self.line(make_item(ItemStatus.ERROR, error="boom")), "Conversion error")
         self.assertEqual(self.line(make_item(ItemStatus.ERROR)), tr("preview.failed"))
 
     def test_nothing_else_claims_a_size(self):
@@ -163,15 +163,20 @@ class WindowDetailTests(WindowTestCase):
         self.select(item)
         self.assertEqual(item.markdown_result, "one two")
 
-    def test_a_failure_shows_the_whole_message_when_there_is_more_to_it(self):
+    def test_a_failure_gives_the_reason_above_the_library_words(self):
         message = "File conversion failed after 1 attempts:\n - PdfConverter threw E with message: No /Root object\n"
         self.select(make_item(ItemStatus.ERROR, error=message))
-        self.assertEqual(self.window.preview_header_status.text(), "No /Root object")
+        self.assertEqual(self.window.preview_header_status.text(), "Conversion error")
         self.assertTrue(self.window.preview_error_detail.isVisible())
         self.assertIn("PdfConverter", self.window.preview_error_detail.text())
 
-    def test_a_short_failure_does_not_repeat_itself(self):
+    def test_a_short_library_message_still_shows_since_the_header_no_longer_says_it(self):
         self.select(make_item(ItemStatus.ERROR, error="boom"))
+        self.assertTrue(self.window.preview_error_detail.isVisible())
+        self.assertEqual(self.window.preview_error_detail.text(), "boom")
+
+    def test_a_failure_with_no_message_shows_no_empty_detail(self):
+        self.select(make_item(ItemStatus.ERROR))
         self.assertFalse(self.window.preview_error_detail.isVisible())
 
     def test_other_states_hide_the_message(self):

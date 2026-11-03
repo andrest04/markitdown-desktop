@@ -114,36 +114,14 @@ class RowReasonTests(unittest.TestCase):
     def test_a_failed_row_gives_its_reason(self):
         from app.ui.queue_delegate import row_status_text
 
-        self.assertEqual(row_status_text(failed(error="file is encrypted")), "Failed: file is encrypted")
-        self.assertEqual(row_status_text(not_saved()), "Not saved: disk full")
+        self.assertEqual(row_status_text(failed(error="file is encrypted")), "Failed: conversion error")
+        self.assertEqual(row_status_text(not_saved()), "Not saved: write error")
         self.assertEqual(row_status_text(saved()), tr("status.done_saved"))
 
     def test_a_failure_with_no_message_still_says_failed(self):
         from app.ui.queue_delegate import row_status_text
 
         self.assertEqual(row_status_text(failed(error="")), tr("status.error"))
-
-    def test_the_reason_skips_the_preamble_markitdown_puts_first(self):
-        from app.ui.queue_delegate import brief_error
-
-        message = (
-            "File conversion failed after 1 attempts:\n"
-            " - PdfConverter threw PDFSyntaxError with message: No /Root object\n"
-        )
-        self.assertEqual(brief_error(message), "No /Root object")
-
-    def test_the_reason_drops_the_system_error_number(self):
-        from app.ui.queue_delegate import brief_error
-
-        self.assertEqual(brief_error("[Errno 28] No space left on device"), "No space left on device")
-        self.assertEqual(brief_error("[WinError 5] Access is denied"), "Access is denied")
-
-    def test_the_reason_keeps_a_plain_message_and_cuts_a_long_one(self):
-        from app.ui.queue_delegate import brief_error
-
-        self.assertEqual(brief_error("Disk full\nmore detail"), "Disk full")
-        self.assertEqual(brief_error(""), "")
-        self.assertTrue(brief_error("x" * 500).endswith("…"))
 
 
 class StateMarkTests(unittest.TestCase):

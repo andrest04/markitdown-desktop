@@ -32,8 +32,11 @@ markitdown/converters/_markdownify.py).
 """
 from __future__ import annotations
 
+import errno
 import os
 import re
+import socket
+import ssl
 import threading
 import warnings
 from dataclasses import dataclass, field
@@ -52,10 +55,17 @@ warnings.filterwarnings(
     module=r"pydub\.utils",
 )
 
-from markitdown import MarkItDown, StreamInfo
+from markitdown import (
+    FileConversionException,
+    MarkItDown,
+    MissingDependencyException,
+    StreamInfo,
+    UnsupportedFormatException,
+)
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
+from requests.exceptions import RequestException
 
-from app.core.queue_model import QueueItem, SourceKind
+from app.core.queue_model import FailureReason, QueueItem, SourceKind
 
 _ILLEGAL_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
@@ -128,12 +138,19 @@ def auto_save_markdown(item: QueueItem, markdown_text: str, downloads_dir: Path 
     return path
 
 
+@dataclass(frozen=True)
+class ExportFailure:
+    item: QueueItem
+    reason: FailureReason
+    detail: str  # raw OS text
+
+
 @dataclass
 class ExportResult:
-    """What `export_markdown` wrote, and which items failed with which error."""
+    """What `export_markdown` wrote, and which items failed and why."""
 
     written: list[Path] = field(default_factory=list)
-    failures: list[tuple[QueueItem, str]] = field(default_factory=list)
+    failures: list[ExportFailure] = field(default_factory=list)
 
 
 def export_markdown(items: list[QueueItem], folder: str | Path) -> ExportResult:
@@ -149,7 +166,7 @@ def export_markdown(items: list[QueueItem], folder: str | Path) -> ExportResult:
             path = unique_download_path(directory, sanitize_filename(default_basename(item)))
             path.write_text(item.markdown_result or "", encoding="utf-8")
         except OSError as exc:
-            result.failures.append((item, str(exc)))
+            result.failures.append(ExportFailure(item, classify_save_error(exc), str(exc)))
         else:
             result.written.append(path)
     return result
@@ -238,6 +255,61 @@ def convert_item(item: QueueItem, options: ConversionOptions) -> str:
     return result.text_content
 
 
+# Every one of these is an OSError, or an IOError in the case of requests, so
+# they have to be checked before the file errors below.
+_NETWORK_ERRORS = (RequestException, ConnectionError, TimeoutError, socket.gaierror, ssl.SSLError)
+_NO_ROOM = {errno.ENOSPC, getattr(errno, "EDQUOT", errno.ENOSPC)}
+_NOT_ALLOWED = {errno.EACCES, errno.EPERM, errno.EROFS}
+
+
+def _classify_attempts(error: FileConversionException) -> FailureReason:
+    """A converter recognized the file and then failed on it.
+
+    markitdown wraps what each attempt raised, and the source already opened by
+    then. So a FileNotFoundError here is a helper program, such as ffmpeg for
+    audio, and most anything else means the contents are not what they claim:
+    in practice BadZipFile, PDFSyntaxError, CompDocError, even a bare ValueError.
+    """
+    errors = [attempt.exc_info[1] for attempt in error.attempts or [] if attempt.exc_info]
+    if not errors:
+        return FailureReason.GENERIC
+    if any(isinstance(exc, (MissingDependencyException, FileNotFoundError)) for exc in errors):
+        return FailureReason.MISSING_DEPENDENCY
+    if any(isinstance(exc, _NETWORK_ERRORS) for exc in errors):
+        return FailureReason.NETWORK
+    if any(isinstance(exc, PermissionError) for exc in errors):
+        return FailureReason.PERMISSION_DENIED
+    return FailureReason.UNREADABLE_FILE
+
+
+def classify_conversion_error(error: Exception) -> FailureReason:
+    """Sort what `convert_item` raised into a reason the interface can translate."""
+    if isinstance(error, UnsupportedFormatException):
+        return FailureReason.UNSUPPORTED_FORMAT
+    if isinstance(error, MissingDependencyException):
+        return FailureReason.MISSING_DEPENDENCY
+    if isinstance(error, FileConversionException):
+        return _classify_attempts(error)
+    if isinstance(error, _NETWORK_ERRORS):
+        return FailureReason.NETWORK
+    if isinstance(error, FileNotFoundError):
+        return FailureReason.FILE_NOT_FOUND
+    if isinstance(error, PermissionError):
+        return FailureReason.PERMISSION_DENIED
+    if isinstance(error, OSError):
+        return FailureReason.UNREADABLE_FILE
+    return FailureReason.GENERIC
+
+
+def classify_save_error(error: OSError) -> FailureReason:
+    """Sort a failed write by errno. Windows error codes arrive mapped onto it."""
+    if error.errno in _NO_ROOM:
+        return FailureReason.DISK_FULL
+    if isinstance(error, PermissionError) or error.errno in _NOT_ALLOWED:
+        return FailureReason.PERMISSION_DENIED
+    return FailureReason.SAVE_GENERIC
+
+
 def iter_supported_files(folder: str):
     """Recursively yield file paths under `folder` matching SUPPORTED_EXTENSIONS."""
     for root, _dirs, files in os.walk(folder):
@@ -284,7 +356,7 @@ class WorkerSignals(QObject):
     # while a conversion runs, identity does not.
     started = Signal(object)
     finished = Signal(object, str)
-    failed = Signal(object, str)
+    failed = Signal(object, object, str)  # item, FailureReason, raw message
 
 
 class ConversionWorker(QRunnable):
@@ -320,6 +392,6 @@ class ConversionWorker(QRunnable):
         try:
             markdown_text = convert_item(self.item, self.options)
         except Exception as exc:  # noqa: BLE001 - must catch everything per-item
-            self.signals.failed.emit(self.item, str(exc))
+            self.signals.failed.emit(self.item, classify_conversion_error(exc), str(exc))
         else:
             self.signals.finished.emit(self.item, markdown_text)

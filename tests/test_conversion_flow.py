@@ -170,7 +170,7 @@ class OverlappingBatchTests(WindowTestCase):
         settle()
         self.assertEqual(
             self.window.status_bar.currentMessage(),
-            tr("status.conversion_failed", message="boom"),
+            tr("status.conversion_failed", message=tr("error.generic")),
         )
 
     def test_first_finished_item_is_selected_when_nothing_is(self):

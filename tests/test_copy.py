@@ -15,7 +15,7 @@ _SEPARATOR = re.compile(r" [-–—/] | · ")
 # Rioplatense verb forms the product must never use.
 _VOSEO = re.compile(r"\b(soltá|pegá|elegí|seleccioná|hacé|tenés|podés|querés|probá|ingresá|escribí|abrí)\b", re.IGNORECASE)
 # Enum values and lookup tables also hold keys, outside a literal tr() call.
-_KEY_LITERAL = re.compile(r"""["']((?:status|preview|type|column|button|menu)\.[a-z0-9_.]+)["']""")
+_KEY_LITERAL = re.compile(r"""["']((?:status|preview|type|column|button|menu|error)\.[a-z0-9_.]+)["']""")
 
 
 def _sources() -> str:

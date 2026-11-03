@@ -42,6 +42,7 @@ from app.core.conversion_queue import ConversionQueue
 from app.core.converter import (
     ConversionOptions,
     classify_paths,
+    classify_save_error,
     default_basename,
     export_markdown,
     get_downloads_dir,
@@ -51,6 +52,7 @@ from app.core.queue_model import (
     COLUMN_STATUS,
     COLUMN_TYPE,
     DisplayState,
+    FailureReason,
     ItemStatus,
     QueueItem,
     QueueTableModel,
@@ -66,8 +68,8 @@ from app.ui.queue_delegate import (
     BrandMark,
     QueueItemDelegate,
     StatusMark,
-    brief_error,
     detail_status,
+    failure_reason_text,
     queue_summary,
 )
 from app.ui.theme import (
@@ -105,6 +107,11 @@ _BRAND_MARGINS_EMPTY = (EMPTY_GUTTER, 18, EMPTY_GUTTER, 0)
 _BRAND_MARGINS_FILLED = (12, 14, 14, 10)
 # Fits a headline and a detail line, so rows never shift when one goes away.
 _SUMMARY_HEIGHT = 46
+
+
+def _save_failure_text(reason: FailureReason, detail: str) -> str:
+    """For a message box, which has room for the system's words after the reason."""
+    return f"{tr(reason.value)} ({detail})"
 
 
 def reveal_command(path: str) -> str | list[str]:
@@ -851,13 +858,14 @@ class MainWindow(QMainWindow):
 
     def _on_item_failed(self, item: QueueItem, message: str) -> None:
         self._refresh_preview_if_selected(item)
-        self.status_bar.showMessage(tr("status.conversion_failed", message=message), 5000)
+        reason = failure_reason_text(item) or message
+        self.status_bar.showMessage(tr("status.conversion_failed", message=reason), 5000)
 
     def _on_item_saved(self, item: QueueItem, path: str) -> None:
         self.status_bar.showMessage(tr("status.saved_to", path=path), 5000)
 
     def _on_item_save_failed(self, item: QueueItem, error: str) -> None:
-        self.status_bar.showMessage(tr("status.autosave_failed", error=error), 6000)
+        self.status_bar.showMessage(tr("status.autosave_failed", error=tr(item.save_error_reason.value)), 6000)
 
     def _on_progress_changed(self, completed: int, total: int) -> None:
         self.progress_bar.setMaximum(total)
@@ -984,10 +992,8 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _error_detail(item: QueueItem) -> str:
-        """The full message, only when it says more than the header's one line."""
+        """The library's own words, under the header's translated reason."""
         message = item.error_message.strip()
-        if message == brief_error(message):
-            return ""
         if len(message) > _ERROR_DETAIL_CHARS:
             return message[:_ERROR_DETAIL_CHARS].rstrip() + "…"
         return message
@@ -1106,7 +1112,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(
                     self,
                     tr("msgbox.save_copy_failed.title"),
-                    tr("msgbox.save_copy_failed.text", error=exc),
+                    tr("msgbox.save_copy_failed.text", error=_save_failure_text(classify_save_error(exc), str(exc))),
                 )
                 return
             self.status_bar.showMessage(tr("status.saved_copy_to", path=path), 4000)
@@ -1127,7 +1133,10 @@ class MainWindow(QMainWindow):
         if result.written:
             self.status_bar.showMessage(tr("status.exported", count=len(result.written), folder=folder), 5000)
         if result.failures:
-            details = "\n".join(f"{item.display_name}: {error}" for item, error in result.failures)
+            details = "\n".join(
+                f"{failure.item.display_name}: {_save_failure_text(failure.reason, failure.detail)}"
+                for failure in result.failures
+            )
             QMessageBox.warning(
                 self,
                 tr("msgbox.export_failed.title"),

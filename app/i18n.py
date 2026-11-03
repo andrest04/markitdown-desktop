@@ -149,6 +149,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "detail.words.other": "{count} words",
         "status.failed_reason": "Failed: {reason}",
         "status.not_saved_reason": "Not saved: {reason}",
+
+        # Why something failed. Lower case: they follow "Failed:" on a row and
+        # are capitalized where they stand alone.
+        "error.unsupported_format": "unsupported format",
+        "error.missing_dependency": "missing component",
+        "error.unreadable_file": "damaged or unreadable file",
+        "error.file_not_found": "file not found",
+        "error.permission_denied": "permission denied",
+        "error.network": "link unavailable",
+        "error.generic": "conversion error",
+        "error.disk_full": "disk full",
+        "error.save_generic": "write error",
         "statusbar.saving_to": "Saving to {path}",
 
         # Queue summary: what needs attention first, then what is ready
@@ -313,6 +325,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "detail.words.other": "{count} palabras",
         "status.failed_reason": "Falló: {reason}",
         "status.not_saved_reason": "Sin guardar: {reason}",
+
+        # Por qué falló algo. En minúscula: siguen a "Falló:" en una fila y se
+        # escriben con mayúscula inicial cuando van solos.
+        "error.unsupported_format": "formato no compatible",
+        "error.missing_dependency": "falta un componente",
+        "error.unreadable_file": "archivo dañado o ilegible",
+        "error.file_not_found": "archivo no encontrado",
+        "error.permission_denied": "permiso denegado",
+        "error.network": "enlace no disponible",
+        "error.generic": "error de conversión",
+        "error.disk_full": "disco lleno",
+        "error.save_generic": "error de escritura",
         "statusbar.saving_to": "Guardando en {path}",
 
         # Queue summary: what needs attention first, then what is ready

@@ -8,7 +8,6 @@ style painted behind the cell can never show through.
 from __future__ import annotations
 
 import os
-import re
 from collections import Counter
 from dataclasses import dataclass
 
@@ -23,7 +22,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.queue_model import DisplayState, QueueItem, QueueTableModel, SourceKind
+from app.core.queue_model import (
+    DisplayState,
+    FailureReason,
+    QueueItem,
+    QueueTableModel,
+    SourceKind,
+)
 from app.i18n import LANG_ES, tr
 from app.i18n import manager as i18n_manager
 from app.ui.theme import Tokens, tokens_for
@@ -41,11 +46,6 @@ _STROKE_OVERHANG = 3
 # One fixed column, wide enough for the label in every language.
 _ACTION_WIDTH = 76
 _ACTION_HEIGHT = 26
-_BRIEF_ERROR_CHARS = 200
-
-# markitdown names the attempt first and the actual problem after this.
-_ATTEMPT_MESSAGE = re.compile(r"threw \w+ with message:\s*(.+)")
-_SYSTEM_ERROR_NUMBER = re.compile(r"^\[(?:Errno|WinError) \d+\]\s*")
 
 RETRY_STATES = {DisplayState.ERROR, DisplayState.SAVE_FAILED}
 
@@ -76,28 +76,20 @@ def current_tokens() -> Tokens:
     return tokens_for((app.property("themeName") if app is not None else None) or "light")
 
 
-def brief_error(message: str) -> str:
-    """The most specific single line of a conversion error."""
-    lines = [line.strip() for line in message.strip().splitlines() if line.strip()]
-    if not lines:
+def failure_reason_text(item: QueueItem) -> str:
+    """A failed item's reason in the current language, or "" when nothing is known."""
+    if item.error_reason == FailureReason.GENERIC and not item.error_message.strip():
         return ""
-    line = lines[0]
-    if line.endswith(":") and len(lines) > 1:
-        line = lines[1].lstrip("- ")
-    found = _ATTEMPT_MESSAGE.search(line)
-    if found:
-        line = found.group(1)
-    line = _SYSTEM_ERROR_NUMBER.sub("", line)
-    return line if len(line) <= _BRIEF_ERROR_CHARS else line[:_BRIEF_ERROR_CHARS].rstrip() + "…"
+    return tr(item.error_reason.value)
 
 
 def row_status_text(item: QueueItem) -> str:
     """A row's status line. A problem names its reason where it is first seen."""
     state = item.display_state
-    if state == DisplayState.ERROR and item.error_message.strip():
-        return tr("status.failed_reason", reason=brief_error(item.error_message))
+    if state == DisplayState.ERROR and failure_reason_text(item):
+        return tr("status.failed_reason", reason=failure_reason_text(item))
     if state == DisplayState.SAVE_FAILED:
-        return tr("status.not_saved_reason", reason=brief_error(item.save_error))
+        return tr("status.not_saved_reason", reason=tr(item.save_error_reason.value))
     return tr(state.value)
 
 
@@ -121,9 +113,10 @@ def detail_status(item: QueueItem) -> str:
     elif state == DisplayState.DONE:
         status = tr(state.value)
     elif state == DisplayState.SAVE_FAILED:
-        return tr("status.save_failed_detail", error=brief_error(item.save_error))
+        return tr("status.save_failed_detail", error=tr(item.save_error_reason.value))
     elif state == DisplayState.ERROR:
-        return brief_error(item.error_message) or tr("preview.failed")
+        reason = failure_reason_text(item)
+        return reason[:1].upper() + reason[1:] if reason else tr("preview.failed")
     elif state == DisplayState.CONVERTING:
         return tr("preview.converting")
     else:

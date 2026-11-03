@@ -10,8 +10,13 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QThreadPool, Signal, Slot
 
-from app.core.converter import ConversionOptions, ConversionWorker, auto_save_markdown
-from app.core.queue_model import QueueItem, QueueTableModel
+from app.core.converter import (
+    ConversionOptions,
+    ConversionWorker,
+    auto_save_markdown,
+    classify_save_error,
+)
+from app.core.queue_model import FailureReason, QueueItem, QueueTableModel
 
 
 class ConversionQueue(QObject):
@@ -103,12 +108,12 @@ class ConversionQueue(QObject):
             self.item_finished.emit(item)
         self._advance_progress(item)
 
-    @Slot(object, str)
-    def _on_failed(self, item: QueueItem, message: str) -> None:
+    @Slot(object, object, str)
+    def _on_failed(self, item: QueueItem, reason: FailureReason, message: str) -> None:
         # An item removed from the queue meanwhile has no failure to report.
         row = self._model.row_of(item)
         if row >= 0:
-            item.mark_failed(message)
+            item.mark_failed(message, reason)
             self._model.refresh_row(row)
         self._advance_progress(item)
         if row >= 0:
@@ -122,7 +127,7 @@ class ConversionQueue(QObject):
         try:
             saved_path = auto_save_markdown(item, item.markdown_result or "", self._downloads_dir)
         except OSError as exc:
-            item.mark_save_failed(str(exc))
+            item.mark_save_failed(str(exc), classify_save_error(exc))
             self.item_save_failed.emit(item, str(exc))
         else:
             item.mark_saved(str(saved_path))

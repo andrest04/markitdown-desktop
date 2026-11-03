@@ -46,7 +46,7 @@ MATRIX = [
         "item": (ItemStatus.DONE, "", "disk full"),
         "text": "status.done_save_failed", "tooltip": tr("tooltip.save_failed", error="disk full"),
         "color": "danger",
-        "header": None, "header_text": tr("status.save_failed_detail", error="disk full"), "kind": "error", "open": False, "retry": True,
+        "header": None, "header_text": tr("status.save_failed_detail", error=tr("error.save_generic")), "kind": "error", "open": False, "retry": True,
     },
     {
         # Transient: converted, auto-save has not reported yet.
@@ -113,7 +113,7 @@ class ConsumerMatrixTests(WindowTestCase):
         for case in MATRIX:
             with self.subTest(item=case["item"]):
                 self.window._update_preview_header(make_item(*case["item"]))
-                expected = case.get("header_text", "boom") if case["header"] is None else tr(case["header"])
+                expected = case.get("header_text", "Conversion error") if case["header"] is None else tr(case["header"])
                 self.assertEqual(self.window.preview_header_status.text(), expected)
                 self.assertEqual(self.window.preview_header_status.property("kind"), case["kind"])
                 self.assertEqual(not self.window.open_file_btn.isHidden(), case["open"])
