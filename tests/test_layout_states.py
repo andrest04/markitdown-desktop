@@ -13,13 +13,19 @@ from PySide6.QtWidgets import (
     QStyle,
     QStyleOptionViewItem,
 )
-from qt_support import WindowTestCase, process_events, pump_until
+from qt_support import WindowTestCase, process_events, pump_until, qapp
 
-from app.core.queue_model import DisplayState, ItemStatus, QueueItem, SourceKind
+from app.core.queue_model import (
+    DisplayState,
+    ItemStatus,
+    QueueItem,
+    QueueTableModel,
+    SourceKind,
+)
 from app.i18n import LANG_EN, LANG_ES, TRANSLATIONS, tr
 from app.i18n import manager as i18n_manager
 from app.ui.queue_delegate import ROW_HEIGHT, QueueItemDelegate, status_style
-from app.ui.theme import READING_WIDTH, tokens_for
+from app.ui.theme import READING_WIDTH, current_tokens, tokens_for
 
 
 def make_item(name, status=ItemStatus.PENDING, saved="", save_error="", error="", result=None):
@@ -199,10 +205,19 @@ class StatusNeverByColorAloneTests(unittest.TestCase):
         self.assertEqual(delegate._type_label(link), "YouTube")
 
     def test_failure_keeps_its_color_on_a_selected_row(self):
-        delegate = QueueItemDelegate()
-        tokens = tokens_for("light")
-        _, color = delegate._status_parts(make_item("a.txt", **FAILED), tokens)
-        self.assertEqual(color, tokens.danger)
+        qapp()
+        model = QueueTableModel()
+        model.add_item(make_item("a.txt", **FAILED))
+        option = QStyleOptionViewItem()
+        option.rect = QRect(0, 0, 300, ROW_HEIGHT)
+        option.state = QStyle.StateFlag.State_Selected
+        image = QImage(300, ROW_HEIGHT, QImage.Format.Format_RGB32)
+        painter = QPainter(image)
+        QueueItemDelegate().paint(painter, option, model.index(0, 0))
+        painter.end()
+        danger = QColor(current_tokens().danger)
+        pixels = {image.pixelColor(x, y).rgb() for x in range(300) for y in range(ROW_HEIGHT)}
+        self.assertIn(danger.rgb(), pixels)
 
 
 class DropAnywhereTests(LayoutTestCase):

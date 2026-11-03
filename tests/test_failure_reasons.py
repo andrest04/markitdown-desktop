@@ -28,8 +28,12 @@ from azure.core.exceptions import (
     ServiceRequestError,
     ServiceResponseError,
 )
-from markitdown import FileConversionException
-from markitdown._exceptions import FailedConversionAttempt
+from markitdown import (
+    DocumentConverter,
+    FailedConversionAttempt,
+    FileConversionException,
+    MarkItDown,
+)
 from qt_support import WindowTestCase, process_events, pump_until, settle
 
 from app.core.converter import (
@@ -39,10 +43,16 @@ from app.core.converter import (
     convert_item,
     export_markdown,
 )
-from app.core.queue_model import FailureReason, ItemStatus, QueueItem, SourceKind
+from app.core.queue_model import (
+    FailureReason,
+    ItemStatus,
+    QueueItem,
+    SourceKind,
+    row_status_text,
+)
 from app.i18n import LANG_EN, LANG_ES, TRANSLATIONS, tr
 from app.i18n import manager as i18n_manager
-from app.ui.queue_delegate import detail_status, row_status_text
+from app.ui.queue_text import detail_status
 
 
 def _file_item(path: Path) -> QueueItem:
@@ -158,13 +168,19 @@ class RealConversionFailureTests(unittest.TestCase):
             self.assertIs(self.reason_for(item), FailureReason.PERMISSION_DENIED)
 
     def test_a_missing_optional_dependency(self):
-        try:
-            raise ImportError("no module named pdfminer")
-        except ImportError:
-            exc_info = sys.exc_info()
-        item = self.write("empty.pdf", b"")
-        with mock.patch("markitdown.converters._pdf_converter._dependency_exc_info", exc_info):
-            self.assertIs(self.reason_for(item), FailureReason.MISSING_DEPENDENCY)
+        class NeedsAPackage(DocumentConverter):
+            """What a converter does when its optional package is not installed."""
+
+            def accepts(self, file_stream, stream_info, **kwargs):
+                return True
+
+            def convert(self, file_stream, stream_info, **kwargs):
+                raise markitdown.MissingDependencyException("install the extra")
+
+        md = MarkItDown()
+        md.register_converter(NeedsAPackage())
+        with mock.patch.object(ConversionOptions, "build_markitdown", return_value=md):
+            self.assertIs(self.reason_for(self.write("data.dat", bytes(range(256)) * 4)), FailureReason.MISSING_DEPENDENCY)
 
     def test_a_refused_connection(self):
         with socket.socket() as probe:

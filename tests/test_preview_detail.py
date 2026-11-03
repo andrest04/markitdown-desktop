@@ -25,7 +25,7 @@ def make_item(status=ItemStatus.DONE, saved="", save_error="", error="", result=
 
 class WordCountTests(unittest.TestCase):
     def count(self, text):
-        from app.ui.queue_delegate import word_count
+        from app.ui.queue_text import word_count
 
         return word_count(text)
 
@@ -51,7 +51,7 @@ class DetailLineTests(unittest.TestCase):
         i18n_manager._language = LANG_EN
 
     def line(self, item):
-        from app.ui.queue_delegate import detail_status
+        from app.ui.queue_text import detail_status
 
         return detail_status(item)
 

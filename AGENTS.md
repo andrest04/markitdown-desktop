@@ -142,8 +142,9 @@ nothing test-related should be left in the user's actual Downloads folder.
     Rows needing it paint a retry in one fixed column (`retry_rect()`,
     `retry_requested`); Enter on the focused row does the same, from
     `MainWindow.eventFilter`. Delete removes rows only while the list has
-    focus (`WidgetShortcut`). This module also holds the pane's tested helpers,
-    `queue_summary()`, `detail_status()`, `row_tooltip()` and `word_count()`.
+    focus (`WidgetShortcut`). `row_tooltip()` lives here too.
+  - `queue_text.py` — plain functions for the pane's words: `queue_summary()`,
+    `detail_status()` and `word_count()`.
   - `status_mark.py` — `StatusMark` and `paint_status_glyph()`, one silhouette
     per state, which the delegate paints too.
   - `brand_mark.py` — `BrandMark` and `paint_brand_mark()`.

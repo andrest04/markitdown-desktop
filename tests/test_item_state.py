@@ -8,8 +8,7 @@ from qt_support import WindowTestCase, pump_until, settle
 
 from app.core.queue_model import COLUMN_STATUS, ItemStatus, QueueItem, SourceKind
 from app.i18n import tr
-from app.ui.queue_delegate import QueueItemDelegate
-from app.ui.theme import tokens_for
+from app.ui.queue_delegate import status_style
 
 SAVED_PATH = "/somewhere/saved.md"
 
@@ -93,16 +92,11 @@ class ConsumerMatrixTests(WindowTestCase):
                 index = self.window.model.index(0, COLUMN_STATUS)
                 self.assertEqual(self.window.model.data(index), tr(case["text"]))
 
-    def test_delegate_parts(self):
-        delegate = QueueItemDelegate()
-        tokens = tokens_for("light")
+    def test_delegate_status_color(self):
         for case in MATRIX:
             with self.subTest(item=case["item"]):
                 item = make_item(*case["item"])
-                self.assertEqual(
-                    delegate._status_parts(item, tokens),
-                    (tr(case["text"]), getattr(tokens, case["color"])),
-                )
+                self.assertEqual(status_style(item.display_state).text, case["color"])
 
     def test_preview_header(self):
         for case in MATRIX:

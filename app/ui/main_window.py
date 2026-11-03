@@ -66,12 +66,8 @@ from app.ui.about_dialog import AboutDialog
 from app.ui.advanced_settings_dialog import AdvancedSettingsDialog
 from app.ui.brand_mark import BrandMark
 from app.ui.drop_zone import EMPTY_GUTTER, DropZone, center_column, empty_column_left
-from app.ui.queue_delegate import (
-    ROW_HEIGHT,
-    QueueItemDelegate,
-    detail_status,
-    queue_summary,
-)
+from app.ui.queue_delegate import ROW_HEIGHT, QueueItemDelegate
+from app.ui.queue_text import detail_status, queue_summary
 from app.ui.status_mark import StatusMark
 from app.ui.theme import (
     PREVIEW_MARGIN,
