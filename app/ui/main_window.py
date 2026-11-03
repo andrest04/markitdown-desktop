@@ -862,6 +862,10 @@ class MainWindow(QMainWindow):
             items = [self.model.item_at(row) for row in rows]
             self.model.remove_rows(rows)
             self.conversion_queue.discard(items)
+            # Removing a row empties the selection, and Delete needs one to act again.
+            last_row = self.model.rowCount() - 1
+            if last_row >= 0:
+                self.table_view.selectRow(min(rows[0], last_row))
             self._refresh_preview()
 
     def action_clear_all(self) -> None:

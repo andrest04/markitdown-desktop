@@ -143,7 +143,8 @@ nothing test-related should be left in the user's actual Downloads folder.
     `retry_requested`); Enter on the focused row does the same, from
     `MainWindow.eventFilter`. Delete removes rows only while the list has
     focus (`WidgetShortcut`), so a file drop hands the list focus unless
-    someone is typing or a dialog is open. `row_tooltip()` lives here too.
+    someone is typing or a dialog is open, and removing rows selects the row
+    now at the first removed position. `row_tooltip()` lives here too.
   - `queue_text.py` — plain functions for the pane's words: `queue_summary()`,
     `detail_status()` and `word_count()`.
   - `status_mark.py` — `StatusMark` and `paint_status_glyph()`, one silhouette
