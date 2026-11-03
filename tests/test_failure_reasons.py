@@ -38,6 +38,7 @@ from qt_support import WindowTestCase, process_events, pump_until, settle
 
 from app.core.converter import (
     ConversionOptions,
+    NoTextFound,
     classify_conversion_error,
     classify_save_error,
     convert_item,
@@ -89,6 +90,19 @@ class RealConversionFailureTests(unittest.TestCase):
 
     def test_a_missing_file(self):
         self.assertIs(self.reason_for(_file_item(self.folder / "gone.txt")), FailureReason.FILE_NOT_FOUND)
+
+    def test_a_file_with_nothing_visible_has_no_text(self):
+        for name, data in (
+            ("bom_only.txt", b"\xef\xbb\xbf"),
+            ("zero_width.txt", "​​\n".encode()),
+            ("mixed.txt", "﻿ ​  \t\r\n­".encode()),
+        ):
+            with self.subTest(file=name):
+                self.assertIs(self.reason_for(self.write(name, data)), FailureReason.NO_TEXT)
+
+    def test_text_behind_a_bom_still_converts(self):
+        text = convert_item(self.write("bom_text.txt", b"\xef\xbb\xbfhello"), ConversionOptions())
+        self.assertIn("hello", text)
 
     def test_an_unsupported_format(self):
         item = self.write("data.dat", bytes(range(256)) * 4)
@@ -205,6 +219,26 @@ class RealConversionFailureTests(unittest.TestCase):
 
         url = f"http://127.0.0.1:{server.server_address[1]}/a.html"
         self.assertIs(self.reason_for(_url_item(url)), FailureReason.NETWORK)
+
+
+class VisibleTextTests(unittest.TestCase):
+    """What counts as text, whatever a converter hands back."""
+
+    def _convert_returning(self, text):
+        engine = mock.Mock()
+        engine.convert_local.return_value = mock.Mock(text_content=text)
+        with mock.patch.object(ConversionOptions, "build_markitdown", return_value=engine):
+            return convert_item(_file_item(Path("a.txt")), ConversionOptions())
+
+    def test_output_with_no_visible_character_is_no_text(self):
+        for text in (None, "", " \n\t", "​", "﻿", "​‍⁠", " 　", "\x00\x1f"):
+            with self.subTest(text=text), self.assertRaises(NoTextFound):
+                self._convert_returning(text)
+
+    def test_any_visible_character_counts_and_comes_back_unchanged(self):
+        for text in ("a", "﻿a", "​1​", "日本語", "\U0001f642", "-"):
+            with self.subTest(text=text):
+                self.assertEqual(self._convert_returning(text), text)
 
 
 class ClassificationTests(unittest.TestCase):

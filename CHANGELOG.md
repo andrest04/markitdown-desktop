@@ -42,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A document that yields no text now fails with "no text found" instead of
   saving an empty `.md`. An earlier saved file stays if a retry finds none.
+  That includes output with only invisible characters, such as an empty text
+  file with a byte order mark.
 - The Delete key removes rows only while the list has focus, so it no longer
   removes one while a button has focus.
 - A save failure on the last file running stays in the status bar instead of
