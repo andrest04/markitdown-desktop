@@ -219,7 +219,6 @@ Qt's `styleHints().colorScheme()`: the app palette cannot answer, because
   --collect-all magika`, needed because both do dynamic/plugin-style
   imports PyInstaller's static analysis can't see), zips it, and attaches
   it to the GitHub Release via `softprops/action-gh-release`.
-- `dependabot.yml` — weekly PRs for `pip` and `github-actions` deps.
 
 Branch protection is enabled on `main` (required PR review) but
 `enforce_admins` is `false` — the repo owner can still push directly;
