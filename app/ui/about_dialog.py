@@ -1,6 +1,7 @@
 """About dialog for MarkItDown Desktop."""
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout
 
 from app.core.converter import get_markitdown_version
@@ -31,5 +32,12 @@ class AboutDialog(QDialog):
         layout.addWidget(link)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("button.close"))
+        close = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        close.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         buttons.accepted.connect(self.accept)
         layout.addWidget(buttons)
+
+        # No ring on open: Enter still activates the default button.
+        self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self.setFocus()

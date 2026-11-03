@@ -20,52 +20,52 @@ MATRIX = [
     {
         "item": (ItemStatus.PENDING, "", ""),
         "text": "status.pending", "tooltip": None,
-        "color": "muted", "pill": ("status.pill.pending", "muted", "sunken"),
+        "color": "muted",
         "header": "preview.pending", "kind": "pending", "open": False, "retry": False,
     },
     {
         "item": (ItemStatus.CONVERTING, "", ""),
         "text": "status.converting", "tooltip": None,
-        "color": "mark", "pill": ("status.pill.converting", "mark", "mark_tint"),
+        "color": "muted",
         "header": "preview.converting", "kind": "converting", "open": False, "retry": False,
     },
     {
         # A retry of an item that was saved earlier.
         "item": (ItemStatus.CONVERTING, SAVED_PATH, ""),
         "text": "status.converting", "tooltip": None,
-        "color": "mark", "pill": ("status.pill.converting", "mark", "mark_tint"),
+        "color": "muted",
         "header": "preview.converting", "kind": "converting", "open": False, "retry": False,
     },
     {
         "item": (ItemStatus.DONE, SAVED_PATH, ""),
         "text": "status.done_saved", "tooltip": tr("tooltip.saved_to", path=SAVED_PATH),
-        "color": "mark", "pill": ("status.pill.saved", "mark", "mark_tint"),
-        "header": "status.done_saved", "kind": "saved", "open": True, "retry": False,
+        "color": "muted",
+        "header": None, "header_text": tr("status.saved_as", name="saved.md"), "kind": "saved", "open": True, "retry": False,
     },
     {
         "item": (ItemStatus.DONE, "", "disk full"),
         "text": "status.done_save_failed", "tooltip": tr("tooltip.save_failed", error="disk full"),
-        "color": "danger", "pill": ("status.pill.save_failed", "danger", "danger_tint"),
-        "header": "status.done_save_failed", "kind": "error", "open": False, "retry": True,
+        "color": "danger",
+        "header": None, "header_text": tr("status.save_failed_detail", error="disk full"), "kind": "error", "open": False, "retry": True,
     },
     {
         # Transient: converted, auto-save has not reported yet.
         "item": (ItemStatus.DONE, "", ""),
         "text": "status.done", "tooltip": None,
-        "color": "muted", "pill": ("status.pill.pending", "muted", "sunken"),
+        "color": "muted",
         "header": "status.done", "kind": "pending", "open": False, "retry": False,
     },
     {
         "item": (ItemStatus.ERROR, "", ""),
         "text": "status.error", "tooltip": "boom",
-        "color": "danger", "pill": ("status.pill.error", "danger", "danger_tint"),
+        "color": "danger",
         "header": None, "kind": "error", "open": False, "retry": True,
     },
     {
         # A failed retry: the earlier file still exists, but the item shows failed.
         "item": (ItemStatus.ERROR, SAVED_PATH, ""),
         "text": "status.error", "tooltip": "boom",
-        "color": "danger", "pill": ("status.pill.error", "danger", "danger_tint"),
+        "color": "danger",
         "header": None, "kind": "error", "open": False, "retry": True,
     },
 ]
@@ -108,17 +108,12 @@ class ConsumerMatrixTests(WindowTestCase):
                     delegate._status_parts(item, tokens),
                     (tr(case["text"]), getattr(tokens, case["color"])),
                 )
-                pill_key, pill_fg, pill_bg = case["pill"]
-                self.assertEqual(
-                    delegate._pill_parts(item, tokens),
-                    (tr(pill_key), getattr(tokens, pill_fg), getattr(tokens, pill_bg)),
-                )
 
     def test_preview_header(self):
         for case in MATRIX:
             with self.subTest(item=case["item"]):
                 self.window._update_preview_header(make_item(*case["item"]))
-                expected = "boom" if case["header"] is None else tr(case["header"])
+                expected = case.get("header_text", "boom") if case["header"] is None else tr(case["header"])
                 self.assertEqual(self.window.preview_header_status.text(), expected)
                 self.assertEqual(self.window.preview_header_status.property("kind"), case["kind"])
                 self.assertEqual(not self.window.open_file_btn.isHidden(), case["open"])
