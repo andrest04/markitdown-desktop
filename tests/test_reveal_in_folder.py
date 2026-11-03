@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from contextlib import contextmanager
 from unittest import mock
 
 from qt_support import WindowTestCase
@@ -24,6 +25,16 @@ def on_platform(name: str):
     return mock.patch("sys.platform", name)
 
 
+@contextmanager
+def system_root(value: str | None):
+    """Set or remove SystemRoot for the block. Only the builder runs, never Explorer."""
+    with mock.patch.dict(os.environ):
+        os.environ.pop("SystemRoot", None)
+        if value is not None:
+            os.environ["SystemRoot"] = value
+        yield
+
+
 class RevealCommandTests(unittest.TestCase):
     def _command(self, path: str):
         return reveal_command(path)
@@ -31,8 +42,18 @@ class RevealCommandTests(unittest.TestCase):
     def test_windows_quotes_the_path_for_explorer_and_changes_nothing_in_it(self):
         for name in AWKWARD_NAMES:
             path = "C:\\Users\\some one\\Downloads\\" + name
-            with self.subTest(name=name), on_platform("win32"):
-                self.assertEqual(self._command(path), f'explorer /select,"{path}"')
+            with self.subTest(name=name), on_platform("win32"), system_root("C:\\Windows"):
+                self.assertEqual(self._command(path), f'C:\\Windows\\explorer.exe /select,"{path}"')
+
+    def test_windows_never_leaves_finding_explorer_to_the_search_order(self):
+        # CreateProcess looks in the current folder first for a bare name.
+        with on_platform("win32"), system_root("D:\\WinNT"):
+            self.assertEqual(self._command("C:\\a.md"), 'D:\\WinNT\\explorer.exe /select,"C:\\a.md"')
+
+    def test_windows_without_a_system_root_falls_back_to_the_bare_name(self):
+        for root in (None, ""):
+            with self.subTest(root=root), on_platform("win32"), system_root(root):
+                self.assertEqual(self._command("C:\\a.md"), 'explorer /select,"C:\\a.md"')
 
     def test_macos_reveals_the_file(self):
         for name in AWKWARD_NAMES:

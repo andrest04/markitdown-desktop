@@ -1,6 +1,7 @@
 """Main application window for MarkItDown Desktop."""
 from __future__ import annotations
 
+import ntpath
 import os
 import subprocess
 import sys
@@ -120,9 +121,13 @@ def reveal_command(path: str) -> str | list[str]:
     No shell ever sees it, so `%VAR%` and `&` in a file name stay literal. Windows
     gets one string because `Popen` passes a string to CreateProcess unchanged,
     and Explorer needs the `/select,"<path>"` quoting that a list would not produce.
+    The full path is there because CreateProcess looks for a bare name in the
+    current folder first.
     """
     if sys.platform.startswith("win"):
-        return f'explorer /select,"{path}"'
+        system_root = os.environ.get("SystemRoot")
+        explorer = ntpath.join(system_root, "explorer.exe") if system_root else "explorer"
+        return f'{explorer} /select,"{path}"'
     if sys.platform == "darwin":
         return ["open", "-R", path]
     return ["xdg-open", os.path.dirname(path)]
