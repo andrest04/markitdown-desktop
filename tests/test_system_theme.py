@@ -69,6 +69,17 @@ class ThemeSwitchTests(WindowTestCase):
             self.window._set_theme_preference("system")
             self.assertEqual(self._theme(), "light")
 
+    def test_the_window_listens_to_the_system_changing_its_scheme(self):
+        # The real signal on the real hints, taken before the patch replaces them.
+        changed = QGuiApplication.styleHints().colorSchemeChanged
+        self.window._set_theme_preference("system")
+        with system_says(Qt.ColorScheme.Dark):
+            changed.emit(Qt.ColorScheme.Dark)
+            self.assertEqual(self._theme(), "dark")
+        with system_says(Qt.ColorScheme.Light):
+            changed.emit(Qt.ColorScheme.Light)
+            self.assertEqual(self._theme(), "light")
+
     def test_a_live_system_change_applies_only_when_following_the_system(self):
         self.window._set_theme_preference("light")
         with system_says(Qt.ColorScheme.Dark):

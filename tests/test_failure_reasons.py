@@ -370,6 +370,21 @@ class WindowTests(WindowTestCase):
         i18n_manager.set_language(LANG_ES, self.window.settings)
         self.assertIn("disco lleno", self.window.preview_header_status.text())
 
+    def test_the_status_bar_gives_the_save_reason_never_the_raw_text(self):
+        # A second item stays running, so "batch complete" does not replace the message.
+        a_source, b_source = self.make_source("a.txt"), self.make_source("b.txt")
+        i18n_manager.set_language(LANG_ES, self.window.settings)
+        error = OSError(errno.ENOSPC, "No space left on device")
+        with mock.patch("pathlib.Path.write_text", side_effect=error):
+            self.window._add_paths([a_source, b_source])
+            self.wait_started(2)
+            self.converter.release("a.txt")
+            self.assertTrue(pump_until(lambda: self.item_named("a.txt").save_error))
+            message = self.window.status_bar.currentMessage()
+
+        self.assertEqual(message, tr("status.autosave_failed", error="disco lleno"))
+        self.assertNotIn("No space left", message)
+
     def test_save_copy_failure_gives_the_reason_in_the_interface_language(self):
         self.add_sources("a.txt")
         self.converter.release("a.txt")

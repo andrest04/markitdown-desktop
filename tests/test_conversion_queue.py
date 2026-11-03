@@ -263,6 +263,35 @@ class RemovedItemTests(ConversionQueueTestCase):
         self.assertFalse([event for event in self.events if event[0] == "failed"])
         self.assertEqual(self.events[-2:], [("progress", 1, 1), ("batch_finished",)])
 
+    def test_a_removed_item_that_fails_is_left_as_it_was(self):
+        self.converter.failures["a.txt"] = "boom"
+        item = make_item("a.txt")
+        self.enqueue(item)
+        pump_until(lambda: self.converter.call_count() == 1)
+        self._remove(item)
+        status_when_removed = item.status
+
+        self.converter.release_all()
+        settle()
+
+        self.assertEqual(item.status, status_when_removed)
+        self.assertEqual(item.error_message, "")
+
+    def test_a_failure_redraws_the_row_of_the_item_that_failed(self):
+        self.converter.failures["a.txt"] = "boom"
+        self.model.add_item(make_item("idle.txt"))
+        item = make_item("a.txt")
+        self.enqueue(item)
+        self.assertTrue(pump_until(lambda: item.status == ItemStatus.CONVERTING))
+
+        told: list[tuple[int, ItemStatus]] = []
+        self.model.dataChanged.connect(lambda first, *_: told.append((first.row(), item.status)))
+        self.converter.release_all()
+        settle()
+
+        self.assertEqual(item.status, ItemStatus.ERROR)
+        self.assertIn((1, ItemStatus.ERROR), told)
+
     def test_discarding_something_the_queue_never_saw_changes_nothing(self):
         self.queue.discard([make_item("a.txt")])
         self.assertEqual(self.events, [])
