@@ -17,12 +17,21 @@ See the [README](README.md) for platform-specific run instructions
 ## Project structure
 
 ```
-main.py                    entry point
-app/ui/main_window.py      main window, drop zone, advanced settings dialog
-app/ui/theme.py             light/dark QSS stylesheets
-app/core/converter.py      MarkItDown wrapper, background worker, auto-save logic
-app/core/queue_model.py    queue table data model
-app/i18n.py                English/Spanish translation layer
+main.py                       entry point
+app/core/converter.py         MarkItDown wrapper, background worker, auto-save
+app/core/conversion_queue.py  runs items through convert, then save
+app/core/queue_model.py       queue items, their states, the table model
+app/ui/main_window.py         main window, menus, list and detail panes
+app/ui/drop_zone.py           empty-window instruction, add buttons, link field
+app/ui/queue_delegate.py      paints the queue rows
+app/ui/queue_text.py          the words for the queue summary and detail header
+app/ui/status_mark.py         one mark per status
+app/ui/brand_mark.py          the app's mark
+app/ui/advanced_settings_dialog.py, about_dialog.py
+app/ui/theme.py               palette and stylesheets, light and dark
+app/i18n.py                   English and Spanish translations
+tests/                        unittest suite
+docs/                         landing page and screenshots
 ```
 
 ## Making a change
@@ -34,8 +43,17 @@ app/i18n.py                English/Spanish translation layer
    dead code, no TODOs left in.
 4. If you touch user-facing strings, add both English and Spanish entries
    in `app/i18n.py` — see the existing keys for the pattern.
-5. Actually run the app and exercise the change before opening the PR.
-   There's no automated test suite yet, so manual verification matters.
+5. Add or update tests for behavior changes, and run the suite. It uses only
+   the standard library's `unittest`, a temporary home folder, and fake
+   settings, so it never touches your Downloads or saved preferences:
+
+   ```bash
+   QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests
+   ```
+
+   On Windows PowerShell, run `$env:QT_QPA_PLATFORM = "offscreen"` first.
+6. Run `ruff check .`, and actually run the app and exercise the change before
+   opening the PR. CI repeats the suite and the lint on Windows, macOS, and Linux.
 
 ## Reporting bugs / requesting features
 

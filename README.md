@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/andrest04/markitdown-desktop)](https://github.com/andrest04/markitdown-desktop/releases)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)](#requirements)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)](#requirements-running-from-source)
 
 A native PySide6 desktop GUI around Microsoft's
 [`markitdown`](https://github.com/microsoft/markitdown) Python package.
