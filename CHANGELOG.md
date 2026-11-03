@@ -35,9 +35,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The preview caps prose at a readable line length, with new typography for
   lists, quotes, tables, and code, and a thinner scrollbar.
 - Redesigned the landing page, now in English and Spanish.
+- The README and landing page show screenshots of the current interface and describe
+  its flows, instead of the old demo.
 
 ### Fixed
 
+- A document that yields no text now fails with "no text found" instead of
+  saving an empty `.md`. An earlier saved file stays if a retry finds none.
+  That includes output with only invisible characters, such as an empty text
+  file with a byte order mark.
+- The Delete key removes rows only while the list has focus, so it no longer
+  removes one while a button has focus.
+- Delete works right after dropping files, without clicking the row first.
+  A drop leaves focus alone while you type in the link field or a dialog is open.
+- Removing a row selects the one that takes its place, or the new last row, so
+  Delete can be pressed again.
+- A save failure on the last file running stays in the status bar instead of
+  being replaced by "All conversions finished". That message now also counts
+  what failed earlier, for example "All conversions finished, 1 failed".
 - Export no longer overwrites existing files, and reports the ones it could
   not write.
 - Results land on the right row when the list changes during a conversion, and

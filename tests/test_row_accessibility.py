@@ -4,11 +4,11 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAccessible, QHelpEvent, QKeySequence
+from PySide6.QtCore import QItemSelectionModel, Qt
+from PySide6.QtGui import QAccessible, QHelpEvent, QKeySequence, QTextCursor
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QStyleOptionViewItem
-from qt_support import WindowTestCase, process_events, pump_until
+from qt_support import WindowTestCase, process_events, pump_until, settle
 
 from app.core.queue_model import (
     COLUMN_NAME,
@@ -55,6 +55,15 @@ class RowTestCase(WindowTestCase):
 
     def press(self, key, modifier=Qt.KeyboardModifier.NoModifier):
         QTest.keyClick(self.window.table_view, key, modifier)
+
+    def _delete_in(self, widget):
+        self.window.activateWindow()
+        widget.setFocus()
+        process_events()
+        if QApplication.focusWidget() is not widget:
+            self.skipTest("this platform plugin gives the window no focus")
+        QTest.keyClick(widget, Qt.Key.Key_Delete)
+        process_events()
 
 
 class KeyboardRetryTests(RowTestCase):
@@ -133,6 +142,131 @@ class KeyboardRetryTests(RowTestCase):
 
         rect = retry_rect(QRect(0, 0, 340, ROW_HEIGHT), failed())
         self.assertEqual((rect.width(), rect.height()), (76, 26))
+
+
+class DeleteKeyTests(RowTestCase):
+    """Delete removes rows only from the list. Elsewhere it belongs to whatever has focus."""
+
+    def setUp(self):
+        super().setUp()
+        self.add(saved("a.txt"), saved("b.txt"))
+        self.window.table_view.selectRow(0)
+        process_events()
+
+    def test_it_removes_the_selected_row_from_the_list(self):
+        self._delete_in(self.window.table_view)
+        self.assertEqual([item.display_name for item in self.window.model.items()], ["b.txt"])
+
+    def test_it_edits_the_link_field(self):
+        field = self.window.url_edit
+        field.setText("abc")
+        field.setCursorPosition(0)
+        self._delete_in(field)
+        self.assertEqual(field.text(), "bc")
+        self.assertEqual(self.window.model.rowCount(), 2)
+
+    def test_it_edits_the_markdown_tab(self):
+        window = self.window
+        window.tabs.setCurrentWidget(window.raw_view)
+        window.preview_body.setVisible(True)
+        process_events()
+        window.raw_view.setPlainText("abc")
+        window.raw_view.moveCursor(QTextCursor.MoveOperation.Start)
+        self._delete_in(window.raw_view)
+        self.assertEqual(window.raw_view.toPlainText(), "bc")
+        self.assertEqual(window.model.rowCount(), 2)
+
+    def test_it_does_nothing_on_a_button(self):
+        self._delete_in(self.window.add_files_btn)
+        self.assertEqual(self.window.model.rowCount(), 2)
+
+    def test_the_menus_still_remove_the_selected_row(self):
+        self.window.remove_action.trigger()
+        self.assertEqual([item.display_name for item in self.window.model.items()], ["b.txt"])
+
+
+class SelectionAfterRemovalTests(RowTestCase):
+    """Removing rows leaves one selected, so Delete can be pressed again."""
+
+    def _selected_names(self):
+        window = self.window
+        rows = window.table_view.selectionModel().selectedRows()
+        return [window.model.item_at(index.row()).display_name for index in rows]
+
+    def _names(self):
+        return [item.display_name for item in self.window.model.items()]
+
+    def _delete(self):
+        self._delete_in(self.window.table_view)
+
+    def test_the_row_that_takes_its_place_is_selected(self):
+        self.add(saved("a.txt"), saved("b.txt"), saved("c.txt"))
+        self.window.table_view.selectRow(1)
+        self._delete()
+        self.assertEqual(self._names(), ["a.txt", "c.txt"])
+        self.assertEqual(self._selected_names(), ["c.txt"])
+
+    def test_the_new_last_row_is_selected_when_the_last_goes(self):
+        self.add(saved("a.txt"), saved("b.txt"))
+        self.window.table_view.selectRow(1)
+        self._delete()
+        self.assertEqual(self._selected_names(), ["a.txt"])
+
+    def test_delete_can_empty_the_list_one_press_at_a_time(self):
+        self.add(saved("a.txt"), saved("b.txt"), saved("c.txt"))
+        self.window.table_view.selectRow(0)
+        self._delete()
+        self.assertEqual(self._names(), ["b.txt", "c.txt"])
+        for remaining in (["c.txt"], []):
+            self.press(Qt.Key.Key_Delete)
+            process_events()
+            self.assertEqual(self._names(), remaining)
+        self.assertEqual(self._selected_names(), [])
+
+    def test_a_multi_selection_leaves_one_row_at_its_first_position(self):
+        self.add(saved("a.txt"), saved("b.txt"), saved("c.txt"), saved("d.txt"))
+        selection = self.window.table_view.selectionModel()
+        model = self.window.model
+        for row in (1, 3):
+            selection.select(
+                model.index(row, 0),
+                QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows,
+            )
+        self._delete()
+        self.assertEqual(self._names(), ["a.txt", "c.txt"])
+        self.assertEqual(self._selected_names(), ["c.txt"])
+
+    def test_selecting_everything_leaves_nothing_selected(self):
+        self.add(saved("a.txt"), saved("b.txt"))
+        self.window.table_view.selectAll()
+        self._delete()
+        self.assertEqual(self._names(), [])
+        self.assertEqual(self._selected_names(), [])
+
+    def test_the_menu_leaves_a_row_selected_too(self):
+        self.add(saved("a.txt"), saved("b.txt"))
+        self.window.table_view.selectRow(0)
+        self.window.remove_action.trigger()
+        self.assertEqual(self._selected_names(), ["b.txt"])
+
+    def test_the_detail_pane_follows_the_new_selection(self):
+        self.add(saved("a.txt"), saved("b.txt"))
+        self.window.table_view.selectRow(0)
+        self._delete()
+        self.assertIs(self.window._preview_item, self.item_named("b.txt"))
+
+    def test_a_running_conversion_is_not_disturbed(self):
+        self.add_sources("a.txt", "b.txt", "c.txt")
+        self.wait_started(3)
+        self.window.table_view.selectRow(0)
+        self._delete()
+        self.assertEqual(self._selected_names(), ["b.txt"])
+        for name in ("a.txt", "b.txt", "c.txt"):
+            self.converter.release(name)
+        settle()
+        self.assertEqual(self.downloaded_names(), ["b.md", "c.md"])
+        self.assertEqual(self._selected_names(), ["b.txt"])
+        self.assertEqual(self.item_named("b.txt").status, ItemStatus.DONE)
 
 
 class AccessibleTextTests(RowTestCase):

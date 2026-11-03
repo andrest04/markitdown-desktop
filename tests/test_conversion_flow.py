@@ -1,7 +1,9 @@
 """End-to-end queue behavior, driven through the window with a stubbed converter."""
 from __future__ import annotations
 
+import errno
 import unittest
+from unittest import mock
 
 from PySide6.QtCore import QThreadPool
 from qt_support import WindowTestCase, pump_until, settle
@@ -171,6 +173,32 @@ class OverlappingBatchTests(WindowTestCase):
         self.assertEqual(
             self.window.status_bar.currentMessage(),
             tr("status.conversion_failed", message=tr("error.generic")),
+        )
+
+    def test_a_save_failure_on_the_last_item_outlives_batch_complete(self):
+        error = OSError(errno.ENOSPC, "No space left on device")
+        source = self.make_source("a.txt")
+        with mock.patch("pathlib.Path.write_text", side_effect=error):
+            self.window._add_paths([source])
+            self.converter.release_all()
+            settle()
+        self.assertEqual(
+            self.window.status_bar.currentMessage(),
+            tr("status.autosave_failed", error=tr("error.disk_full")),
+        )
+        self.assertFalse(self.progress_state()[2])
+
+    def test_batch_message_counts_a_failure_an_earlier_item_had(self):
+        self.converter.failures["a.txt"] = "boom"
+        self.add_sources("a.txt", "b.txt")
+        self.wait_started(2)
+        self.converter.release("a.txt")
+        pump_until(lambda: self.window.progress_bar.value() == 1)
+        self.converter.release("b.txt")
+        settle()
+        self.assertEqual(
+            self.window.status_bar.currentMessage(),
+            tr("status.batch_complete_problems", summary=tr("summary.failed.one")),
         )
 
     def test_first_finished_item_is_selected_when_nothing_is(self):

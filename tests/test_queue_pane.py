@@ -63,7 +63,7 @@ class SummaryTests(unittest.TestCase):
         i18n_manager._language = LANG_EN
 
     def summary(self, *items):
-        from app.ui.queue_delegate import queue_summary
+        from app.ui.queue_text import queue_summary
 
         return queue_summary(list(items))
 
@@ -113,14 +113,14 @@ class RowReasonTests(unittest.TestCase):
         i18n_manager._language = LANG_EN
 
     def test_a_failed_row_gives_its_reason(self):
-        from app.ui.queue_delegate import row_status_text
+        from app.core.queue_model import row_status_text
 
         self.assertEqual(row_status_text(failed(error="file is encrypted")), "Failed: conversion error")
         self.assertEqual(row_status_text(not_saved()), "Not saved: write error")
         self.assertEqual(row_status_text(saved()), tr("status.done_saved"))
 
     def test_a_failure_with_no_message_still_says_failed(self):
-        from app.ui.queue_delegate import row_status_text
+        from app.core.queue_model import row_status_text
 
         self.assertEqual(row_status_text(failed(error="")), tr("status.error"))
 

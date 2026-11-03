@@ -4,417 +4,304 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>MarkItDown Desktop: drop it, get Markdown</title>
-<meta name="description" content="An unofficial, open-source desktop GUI for Microsoft's markitdown. Drag a file, get Markdown in your Downloads folder. Windows, macOS, Linux." />
+<meta name="description" content="An unofficial, open-source desktop app for Microsoft's markitdown. Drop a file, and the Markdown saves to your Downloads folder. Windows, macOS, Linux." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect width='20' height='20' rx='4' fill='%2314213D'/%3E%3Crect y='7.5' width='20' height='5' fill='%23FFE84D'/%3E%3Crect x='4' y='4' width='12' height='1.5' fill='%23fff'/%3E%3Crect x='4' y='14.5' width='8' height='1.5' fill='%23fff'/%3E%3C/svg%3E" />
 <style>
+  /* Ink on paper, and one highlighter. The same tokens as app/ui/theme.py. */
   :root {
-    --bg: #F1F3F0;
-    --bg-elevated: #FBFCFB;
-    --bg-muted: #E7EBE6;
-    --text: #1A211C;
-    --text-muted: #5E6A63;
-    --border: #C5CEC6;
-    --accent: #0F6E56;
-    --accent-hover: #0C5A47;
-    --accent-tint: #DCEBE4;
-    --accent-text: #F4FBF7;
-    --code-bg: #101614;
-    --code-text: #E6EDE8;
-    --shadow: 0 1px 2px rgba(16, 22, 20, 0.06), 0 12px 28px -8px rgba(16, 22, 20, 0.16);
-    --link-text: #0C5A47;
+    color-scheme: light;
+    --sheet: #FFFFFF;
+    --desk: #EEF0F4;
+    --wash: #E2E5EC;
+    --wash-strong: #D3D8E2;
+    --rule: #D5D9E2;
+    --ink: #14213D;
+    --muted: #4A5568;
+    --primary-hover: #24345A;
+    --primary-fg: #FFFFFF;
+    --mark: #FFE84D;
+    --on-mark: #14213D;
+    --code-bg: #14213D;
+    --code-fg: #EEF0F5;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #101614;
-      --bg-elevated: #181E1B;
-      --bg-muted: #0C110F;
-      --text: #E6EDE8;
-      --text-muted: #8A968E;
-      --border: #2A332E;
-      --accent: #3DAB86;
-      --accent-hover: #56C49C;
-      --accent-tint: #16352C;
-      --accent-text: #06241B;
-      --code-bg: #0A0F0D;
-      --code-text: #E6EDE8;
-      --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 32px -8px rgba(0, 0, 0, 0.45);
-      --link-text: #56C49C;
+      color-scheme: dark;
+      --sheet: #232936;
+      --desk: #1A1F2B;
+      --wash: #2E3544;
+      --wash-strong: #3A4254;
+      --rule: #343B4B;
+      --ink: #EEF0F5;
+      --muted: #AEB6C6;
+      --primary-hover: #FFFFFF;
+      --primary-fg: #1A1F2B;
+      --mark: #F5DC4A;
+      --on-mark: #1A1F2B;
+      --code-bg: #1A1F2B;
+      --code-fg: #EEF0F5;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #101614; --bg-elevated: #181E1B; --bg-muted: #0C110F; --text: #E6EDE8;
-    --text-muted: #8A968E; --border: #2A332E; --accent: #3DAB86; --accent-hover: #56C49C;
-    --accent-tint: #16352C; --accent-text: #06241B; --code-bg: #0A0F0D; --code-text: #E6EDE8;
-    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 16px 32px -8px rgba(0,0,0,0.45);
-    --link-text: #56C49C;
+    color-scheme: dark;
+    --sheet: #232936; --desk: #1A1F2B; --wash: #2E3544; --wash-strong: #3A4254; --rule: #343B4B;
+    --ink: #EEF0F5; --muted: #AEB6C6; --primary-hover: #FFFFFF; --primary-fg: #1A1F2B;
+    --mark: #F5DC4A; --on-mark: #1A1F2B; --code-bg: #1A1F2B; --code-fg: #EEF0F5;
   }
   :root[data-theme="light"] {
-    --bg: #F1F3F0; --bg-elevated: #FBFCFB; --bg-muted: #E7EBE6; --text: #1A211C;
-    --text-muted: #5E6A63; --border: #C5CEC6; --accent: #0F6E56; --accent-hover: #0C5A47;
-    --accent-tint: #DCEBE4; --accent-text: #F4FBF7; --code-bg: #101614; --code-text: #E6EDE8;
-    --shadow: 0 1px 2px rgba(16,22,20,0.06), 0 12px 28px -8px rgba(16,22,20,0.16);
-    --link-text: #0C5A47;
+    color-scheme: light;
+    --sheet: #FFFFFF; --desk: #EEF0F4; --wash: #E2E5EC; --wash-strong: #D3D8E2; --rule: #D5D9E2;
+    --ink: #14213D; --muted: #4A5568; --primary-hover: #24345A; --primary-fg: #FFFFFF;
+    --mark: #FFE84D; --on-mark: #14213D; --code-bg: #14213D; --code-fg: #EEF0F5;
   }
 
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
   body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Ubuntu", "Noto Sans", sans-serif;
+    margin: 0;
+    background: var(--sheet);
+    color: var(--ink);
+    font-family: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Ubuntu, Cantarell, "Noto Sans", "DejaVu Sans", sans-serif;
+    font-size: 1.0625rem;
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
   }
-  main { max-width: 920px; margin: 0 auto; padding: 0 24px; }
-  a { color: var(--link-text); }
-  a:focus-visible, button:focus-visible {
-    outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px;
-  }
-
-  @keyframes rise {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  @media (prefers-reduced-motion: no-preference) {
-    .hero-animate { animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
-    .hero-animate:nth-child(2) { animation-delay: 0.05s; }
-    .hero-animate:nth-child(3) { animation-delay: 0.1s; }
-    .hero-animate:nth-child(4) { animation-delay: 0.15s; }
-
-    .reveal, .screenshot-frame { opacity: 0; transform: translateY(12px); }
-    .reveal.in-view, .screenshot-frame.in-view {
-      opacity: 1; transform: translateY(0);
-      transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    #how-it-works .flow-step {
-      opacity: 0; transform: translateX(-28px);
-      transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    #how-it-works.in-view .flow-step { opacity: 1; transform: translateX(0); }
-    #how-it-works.in-view .flow-step:nth-child(1) { transition-delay: 0.05s; }
-    #how-it-works.in-view .flow-step:nth-child(2) { transition-delay: 0.18s; }
-    #how-it-works.in-view .flow-step:nth-child(3) { transition-delay: 0.31s; }
-  }
+  .column { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
+  @media (max-width: 640px) { .column { padding: 0 20px; } }
+  a { color: inherit; text-underline-offset: 2px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 2px; }
+  img { display: block; max-width: 100%; }
+  code, pre, .path { font-family: "Cascadia Mono", Consolas, "SF Mono", Menlo, "DejaVu Sans Mono", monospace; font-size: 0.92em; }
 
   /* Nav */
-  .nav {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 20px 24px; max-width: 920px; margin: 0 auto;
-  }
-  .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 1.02rem; text-decoration: none; color: var(--text); }
-  .brand .dot { width: 9px; height: 9px; border-radius: 3px; background: var(--accent); display: inline-block; flex: none; }
-  .nav-links { display: flex; align-items: center; gap: 22px; font-size: 0.9rem; }
-  .nav-links a { color: var(--text-muted); text-decoration: none; transition: color 0.15s ease; }
-  .nav-links a:hover { color: var(--accent); }
-  .nav-star { display: inline-flex; align-items: center; gap: 3px; color: #c9972b !important; }
-  .nav-star:hover { color: #e0ac35 !important; }
-  .nav-star .star-count { font-variant-numeric: tabular-nums; }
-  @media (prefers-color-scheme: dark) { .nav-star { color: #e0ac35 !important; } .nav-star:hover { color: #f0c060 !important; } }
-  :root[data-theme="dark"] .nav-star { color: #e0ac35 !important; }
-  :root[data-theme="dark"] .nav-star:hover { color: #f0c060 !important; }
+  .nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 18px; padding-bottom: 18px; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .brand svg { flex: none; width: 22px; height: 22px; }
+  .brand .page { fill: var(--ink); }
+  .brand .stroke { fill: var(--mark); }
+  .brand .line { fill: var(--primary-fg); }
+  .nav-links { display: flex; align-items: center; gap: 22px; font-size: 0.94rem; color: var(--muted); }
+  .nav-links a { text-decoration: none; padding: 6px 0; white-space: nowrap; }
+  .nav-links a:hover { color: var(--ink); text-decoration: underline; }
+  .nav-star { white-space: nowrap; }
+  .star-count { font-variant-numeric: tabular-nums; }
   .lang-toggle {
-    background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-muted);
-    border-radius: 6px; padding: 4px 9px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
-    transition: color 0.15s ease, background-color 0.15s ease;
+    background: var(--wash); border: 0; color: var(--ink); border-radius: 4px; cursor: pointer;
+    padding: 6px 10px; font: inherit; font-size: 0.86rem; font-weight: 600;
   }
-  .lang-toggle:hover { color: var(--accent); background: var(--bg-muted); }
+  .lang-toggle:hover { background: var(--wash-strong); }
+  @media (max-width: 860px) { .nav-section { display: none; } }
 
   /* Hero */
-  .hero { text-align: center; padding: 64px 0 44px; }
-  .hero h1 {
-    font-size: clamp(2.1rem, 5vw, 3.25rem);
-    font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; margin: 0 0 18px;
+  .hero { padding-top: 56px; padding-bottom: 48px; }
+  h1 {
+    font-size: clamp(2.5rem, 6.4vw, 4.75rem);
+    font-weight: 700; letter-spacing: -0.03em; line-height: 1.34; margin: 0 0 22px;
+    text-wrap: balance;
   }
-  .hero p.lead {
-    color: var(--text-muted); font-size: 1.12rem; max-width: 560px; margin: 0 auto 30px;
+  .stroke-text {
+    color: var(--on-mark);
+    background: linear-gradient(var(--mark), var(--mark)) no-repeat 0 0 / 100% 100%;
+    padding: 0.02em 0.16em;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
   }
-  .badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 16px 0 0; opacity: 0.85; }
-  .badges img { display: block; height: 16px; }
-  .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-  .cta-note { color: var(--text-muted); font-size: 0.82rem; margin: 14px 0 0; }
+  /* The one authored moment: the marker crosses the instruction once. */
+  @media (prefers-reduced-motion: no-preference) {
+    .stroke-text { animation: marker 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both; }
+    @keyframes marker { from { background-size: 0 100%; color: var(--ink); } to { background-size: 100% 100%; color: var(--on-mark); } }
+  }
+  .lead { font-size: 1.22rem; line-height: 1.5; max-width: 34em; margin: 0 0 30px; color: var(--muted); }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 10px; }
   .btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    padding: 12px 22px; border-radius: 8px; font-weight: 600; font-size: 0.95rem;
-    text-decoration: none; border: 1px solid transparent; transition: background-color 0.15s ease, transform 0.15s ease;
+    display: inline-block; padding: 12px 20px; border-radius: 4px; font-weight: 600; font-size: 0.98rem;
+    text-decoration: none; transition: background-color 0.15s ease;
   }
-  .btn:active { transform: translateY(1px); }
-  .btn-primary { background: var(--accent); color: var(--accent-text); }
-  .btn-primary:hover { background: var(--accent-hover); }
-  .btn-secondary { background: var(--bg-elevated); color: var(--text); border-color: var(--border); }
-  .btn-secondary:hover { background: var(--bg-muted); }
+  .btn-primary { background: var(--ink); color: var(--primary-fg); }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-quiet { background: var(--wash); color: var(--ink); }
+  .btn-quiet:hover { background: var(--wash-strong); }
+  .note { color: var(--muted); font-size: 0.9rem; margin: 14px 0 0; }
 
-  /* Screenshot */
-  .screenshot-frame {
-    margin: 8px 0 72px; border-radius: 14px; overflow: hidden;
-    border: 1px solid var(--border); box-shadow: var(--shadow);
+  /* The app itself is the picture. */
+  .desk { background: var(--desk); border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 40px 0; }
+  .window { border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+  .window img { width: 100%; height: auto; }
+  /* A phone cannot show a whole desktop window legibly: show the part that matters, larger. */
+  @media (max-width: 640px) {
+    .window img { width: 180%; max-width: none; }
+    .window img[data-shot="app-empty"] { margin-left: -37%; }
   }
-  .screenshot-frame img { display: block; width: 100%; height: auto; }
 
   /* Sections */
-  section { margin-bottom: 72px; }
-  h2 { font-size: 1.55rem; letter-spacing: -0.015em; margin: 0 0 10px; }
-  .section-lead { color: var(--text-muted); margin: 0 0 32px; max-width: 620px; }
+  section.column { padding-top: 88px; }
+  h2 { font-size: clamp(1.7rem, 3.2vw, 2.3rem); font-weight: 650; letter-spacing: -0.02em; line-height: 1.2; margin: 0 0 14px; text-wrap: balance; }
+  h3 { font-size: 1.06rem; font-weight: 600; margin: 0; }
+  .section-lead { color: var(--muted); max-width: 36em; margin: 0 0 30px; }
 
-  /* Features: one elevated primary feature + a tight list of the rest, not a card grid */
-  .feature-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: stretch; }
-  @media (max-width: 720px) { .feature-layout { grid-template-columns: 1fr; } }
+  /* How it works: three real steps, in order, beside the window they happen in. */
+  .how { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: center; }
+  .steps { list-style: none; counter-reset: step; margin: 22px 0 0; padding: 0; }
+  .steps li { counter-increment: step; display: grid; grid-template-columns: 2.2rem 1fr; padding: 18px 0; border-top: 1px solid var(--rule); }
+  .steps li::before { content: counter(step); font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .steps p { margin: 4px 0 0; color: var(--muted); }
+  @media (max-width: 860px) { .how { grid-template-columns: minmax(0, 1fr); gap: 32px; } }
 
-  .feature-primary {
-    background: var(--accent-tint); border: 1px solid var(--border); border-radius: 14px;
-    padding: 28px; display: flex; flex-direction: column; justify-content: center;
-  }
-  .feature-primary .path-chip {
-    display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
-    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 7px;
-    padding: 5px 10px; font-size: 0.8rem; font-family: "Cascadia Code", Consolas, monospace;
-    color: var(--text-muted); margin-bottom: 16px;
-  }
-  .feature-primary h3 { font-size: 1.2rem; margin: 0 0 8px; letter-spacing: -0.01em; }
-  .feature-primary p { color: var(--text-muted); margin: 0; font-size: 0.96rem; }
-
-  .feature-list {
-    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 14px;
-    padding: 6px 24px;
-  }
-  .feature-row { display: flex; gap: 14px; padding: 16px 0; }
-  .feature-row + .feature-row { border-top: 1px solid var(--border); }
-  .feature-row .mark { flex: none; width: 20px; text-align: center; font-size: 1rem; line-height: 1.6; }
-  .feature-row h3 { font-size: 0.96rem; margin: 0 0 3px; }
-  .feature-row p { color: var(--text-muted); font-size: 0.88rem; margin: 0; }
-
-  /* How it works: numbered cards */
-  .flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-  @media (max-width: 640px) { .flow { grid-template-columns: 1fr; } }
-  .flow-step {
-    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 14px;
-    padding: 20px 20px 22px; min-width: 0;
-  }
-  .flow-num {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 26px; height: 26px; border-radius: 50%; margin-bottom: 12px;
-    background: var(--text); color: var(--bg); font-weight: 700; font-size: 0.82rem;
-  }
-  .flow-step h3 { font-size: 1rem; margin: 0 0 6px; }
-  .flow-step p { margin: 0; color: var(--text-muted); font-size: 0.92rem; }
+  /* Features: one claim first, then plain rows sharing a left edge. */
+  .claim { font-size: clamp(1.3rem, 2.4vw, 1.65rem); line-height: 1.35; font-weight: 500; letter-spacing: -0.01em; max-width: 34em; margin: 0 0 8px; }
+  .path { display: block; color: var(--muted); margin: 0 0 34px; overflow-wrap: anywhere; }
+  .rows { margin: 0; border-bottom: 1px solid var(--rule); }
+  .row { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 8px 32px; padding: 18px 0; border-top: 1px solid var(--rule); }
+  .row p { margin: 0; color: var(--muted); max-width: 38em; }
+  @media (max-width: 640px) { .row { grid-template-columns: minmax(0, 1fr); } }
 
   /* Formats */
-  .formats { display: flex; flex-wrap: wrap; gap: 8px; }
-  .pill {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: var(--bg-muted); border: 1px solid var(--border); color: var(--text);
-    padding: 6px 12px; border-radius: 999px; font-size: 0.85rem;
-    transition: border-color 0.15s ease, transform 0.15s ease;
-  }
-  .pill:hover { border-color: var(--text-muted); transform: translateY(-1px); }
-  .pill img { display: block; width: 15px; height: 15px; flex: none; }
+  .formats { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px 24px; }
+  .formats li { display: flex; align-items: center; gap: 10px; }
+  .formats img { flex: none; width: 18px; height: 18px; }
 
-  /* Install tabs */
-  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  /* Install */
+  .download-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 0; border-top: 1px solid var(--rule); }
+  .download-row:last-child { border-bottom: 1px solid var(--rule); }
+  .platform { display: flex; align-items: center; gap: 12px; }
+  .platform img { flex: none; width: 20px; height: 20px; }
+  .platform p { margin: 2px 0 0; color: var(--muted); font-size: 0.94rem; }
+  .download-row .btn { flex: none; padding: 9px 16px; font-size: 0.94rem; }
+  .source-heading { margin: 44px 0 4px; font-size: 1.2rem; }
+  .source-note { color: var(--muted); margin: 0 0 14px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
   .tab {
-    background: transparent; border: none; padding: 10px 16px; font-size: 0.92rem; font-weight: 600;
-    color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent;
+    background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 10px 14px;
+    font: inherit; font-size: 0.96rem; font-weight: 600; color: var(--muted); cursor: pointer;
   }
-  .tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab:hover { color: var(--ink); }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
-  @media (prefers-reduced-motion: no-preference) {
-    .tab-panel.active { opacity: 0; transition: opacity 0.15s ease; }
-    .tab-panel.active.in { opacity: 1; }
-  }
-
-  .source-heading { font-size: 1.1rem; color: var(--text-muted); margin: 0 0 4px; }
-  .source-note { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 20px; }
-
-  .download-list {
-    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 14px;
-    padding: 6px 24px; margin-bottom: 28px;
-  }
-  .download-row {
-    display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    padding: 16px 0;
-  }
-  .download-row + .download-row { border-top: 1px solid var(--border); }
-  .download-row .platform { font-weight: 600; font-size: 0.96rem; }
-  .download-row .platform-note { color: var(--text-muted); font-size: 0.85rem; margin: 2px 0 0; }
-  .download-row .btn { flex: none; padding: 9px 16px; font-size: 0.88rem; }
-  .download-row .btn:hover { background: var(--accent-tint); border-color: var(--accent); color: var(--accent); }
-  .platform-icon { display: inline-flex; vertical-align: middle; width: 18px; height: 18px; margin-left: 8px; }
-  .platform-icon img { display: block; width: 100%; height: 100%; }
-  .platform-icon-windows { width: 14px; height: 14px; }
-  .platform-icon-apple { position: relative; top: -2px; }
-  pre {
-    background: var(--code-bg); color: var(--code-text); border-radius: 8px;
-    padding: 16px; overflow-x: auto; font-size: 0.86rem; margin: 0 0 10px;
-    font-family: "Cascadia Code", Consolas, "SFMono-Regular", Menlo, monospace;
-  }
-  code { font-family: "Cascadia Code", Consolas, "SFMono-Regular", Menlo, monospace; }
+  pre { background: var(--code-bg); color: var(--code-fg); border-radius: 4px; padding: 16px 18px; overflow-x: auto; margin: 0; line-height: 1.6; }
 
   /* Footer */
-  footer {
-    border-top: 1px solid var(--border); padding: 28px 0 48px;
-    color: var(--text-muted); font-size: 0.88rem; text-align: center;
-  }
-  footer p { margin: 0 0 6px; }
-  footer a { color: var(--text-muted); text-decoration: underline; transition: color 0.15s ease; }
-  .author-avatar { display: inline-block; margin-top: 12px; }
-  .author-avatar img { display: block; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); }
-
-  .disclaimer {
-    background: var(--bg-muted); border: 1px solid var(--border); border-radius: 10px;
-    padding: 14px 18px; font-size: 0.88rem; color: var(--text-muted); margin: 40px 0 32px;
-  }
+  .disclaimer { color: var(--muted); max-width: 44em; margin: 72px 0 0; font-size: 0.94rem; }
+  footer { margin-top: 40px; border-top: 1px solid var(--rule); padding: 24px 0 40px; color: var(--muted); font-size: 0.92rem; }
+  footer .column { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  footer p { margin: 0; }
 </style>
 </head>
 <body>
 
-<nav class="nav">
-  <a class="brand" href="#top"><span class="dot"></span>MarkItDown Desktop</a>
-  <div class="nav-links">
-    <a href="#features" data-i18n="nav.features">Features</a>
-    <a href="#how-it-works" data-i18n="nav.how">How it works</a>
-    <a href="#formats" data-i18n="nav.formats">Formats</a>
-    <a href="#install" data-i18n="nav.install">Install</a>
-    <a href="https://github.com/andrest04/markitdown-desktop">GitHub</a>
-    <a class="nav-star" id="navStar" href="https://github.com/andrest04/markitdown-desktop" aria-label="Star this project on GitHub" data-i18n-aria-label="nav.starAriaLabel">
-      ★ <span class="star-count" id="starCount" aria-hidden="true"></span>
-    </a>
+<div class="nav column">
+  <a class="brand" href="#top">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><rect class="page" width="20" height="20" rx="4" /><rect class="stroke" y="7.5" width="20" height="5" /><rect class="line" x="4" y="4" width="12" height="1.5" /><rect class="line" x="4" y="14.5" width="8" height="1.5" /></svg>
+    MarkItDown Desktop
+  </a>
+  <nav class="nav-links" aria-label="Primary" data-i18n-aria-label="nav.label">
+    <a class="nav-section" href="#how-it-works" data-i18n="nav.how">How it works</a>
+    <a class="nav-section" href="#features" data-i18n="nav.features">Features</a>
+    <a class="nav-section" href="#formats" data-i18n="nav.formats">Formats</a>
+    <a class="nav-section" href="#install" data-i18n="nav.install">Install</a>
+    <a class="nav-star" id="navStar" href="https://github.com/andrest04/markitdown-desktop" aria-label="Star this project on GitHub" data-i18n-aria-label="nav.starAriaLabel">GitHub <span aria-hidden="true">★</span> <span class="star-count" id="starCount" aria-hidden="true"></span></a>
     <button class="lang-toggle" id="langToggle" type="button" aria-label="Switch language"></button>
-  </div>
-</nav>
+  </nav>
+</div>
 
 <main id="top">
 
-  <section class="hero">
-    <h1 class="hero-animate" data-i18n="hero.title">Drop a file. Get Markdown. Done.</h1>
-    <p class="lead hero-animate" data-i18n-html="hero.lead">
-      A free, open-source desktop app for Microsoft's <code>markitdown</code>.
-      Drag any file or paste a URL, and it converts and saves straight to your
-      Downloads folder. No manual export step, no CLI required.
-    </p>
-    <div class="cta-row hero-animate">
+  <div class="hero column">
+    <h1><span class="stroke-text" data-i18n="hero.title">Drop a file. Get Markdown.</span></h1>
+    <p class="lead" data-i18n-html="hero.lead">A free, open-source desktop app for Microsoft's <code>markitdown</code>. Drop a file anywhere in the window or paste a link, and the <code>.md</code> saves itself to your Downloads folder. No export step, no command line.</p>
+    <div class="cta-row">
       <a class="btn btn-primary" href="https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop.exe" data-i18n="cta.windows">Download for Windows (.exe)</a>
-      <a class="btn btn-secondary" href="https://github.com/andrest04/markitdown-desktop/releases/latest" data-i18n="cta.other">Download for macOS / Linux</a>
+      <a class="btn btn-quiet" href="#install" data-i18n="cta.other">macOS and Linux</a>
     </div>
-    <p class="cta-note hero-animate" data-i18n="cta.note">Unofficial, open-source, not affiliated with Microsoft.</p>
-    <div class="badges hero-animate">
-      <a href="https://github.com/andrest04/markitdown-desktop/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
-      <a href="https://github.com/andrest04/markitdown-desktop/releases"><img src="https://img.shields.io/github/v/release/andrest04/markitdown-desktop" alt="Latest release"></a>
-      <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational" alt="Cross-platform">
-    </div>
-  </section>
-
-  <div class="screenshot-frame">
-    <img src="demo.gif" alt="MarkItDown Desktop walkthrough: add a file, it converts, the rendered markdown preview appears" data-i18n-alt="screenshot.alt" loading="lazy">
+    <p class="note" data-i18n="cta.note">Unofficial, open-source, not affiliated with Microsoft.</p>
   </div>
 
-  <section id="features" class="reveal">
+  <div class="desk">
+    <div class="column">
+      <div class="window">
+        <img data-shot="app" src="screenshots/app-light-en.png" width="1180" height="760" alt="MarkItDown Desktop with five files in its list: three saved to Downloads, one failed with the reason no text found and a Retry button, one converting. The selected file's Markdown is rendered beside the list." data-i18n-alt="shot.app.alt">
+      </div>
+    </div>
+  </div>
+
+  <section id="how-it-works" class="column">
+    <div class="how">
+      <div>
+        <h2 data-i18n="how.title">How it works</h2>
+        <ol class="steps">
+          <li><div><h3 data-i18n="how.1.title">Add something</h3><p data-i18n="how.1.body">Drop files or folders anywhere in the window, use Add files, or paste a webpage or YouTube link.</p></div></li>
+          <li><div><h3 data-i18n="how.2.title">It converts right away</h3><p data-i18n="how.2.body">In the background, so the window stays usable. One failed file does not stop the rest.</p></div></li>
+          <li><div><h3 data-i18n="how.3.title">It is already in Downloads</h3><p data-i18n="how.3.body">Then copy the Markdown, open the file, or show it in its folder.</p></div></li>
+        </ol>
+      </div>
+      <div class="window">
+        <img data-shot="app-empty" src="screenshots/app-empty-light-en.png" width="1180" height="760" loading="lazy" alt="The empty window: a highlighted instruction to drop a document anywhere, Add files and Add folder buttons, and a field to paste a link." data-i18n-alt="shot.empty.alt">
+      </div>
+    </div>
+  </section>
+
+  <section id="features" class="column">
     <h2 data-i18n="features.title">Why this exists</h2>
-    <p class="section-lead" data-i18n-html="features.lead">markitdown itself is a command-line tool: you run it, redirect output, manage files yourself. This wraps the same engine with no export step. Drop a file and the <code>.md</code> lands in Downloads the moment it converts.</p>
-
-    <div class="feature-layout">
-      <div class="feature-primary">
-        <span class="path-chip">~/Downloads/report.md</span>
-        <h3 data-i18n="features.primary.title">Auto-saves to Downloads, always</h3>
-        <p data-i18n-html="features.primary.body">The moment a file finishes converting, the <code>.md</code> lands in your Downloads folder under its original name. Name collisions get a safe numeric suffix instead of overwriting anything. No export dialog to remember.</p>
-      </div>
-
-      <div class="feature-list">
-        <div class="feature-row">
-          <span class="mark">→</span>
-          <div><h3 data-i18n="features.list.1.title">Live preview</h3><p data-i18n="features.list.1.body">Rendered or raw Markdown, editable before saving a copy elsewhere.</p></div>
-        </div>
-        <div class="feature-row">
-          <span class="mark">→</span>
-          <div><h3 data-i18n="features.list.2.title">Light &amp; dark themes</h3><p data-i18n="features.list.2.body">Follows your system automatically, or switch manually.</p></div>
-        </div>
-        <div class="feature-row">
-          <span class="mark">→</span>
-          <div><h3 data-i18n="features.list.3.title">English &amp; Spanish</h3><p data-i18n="features.list.3.body">Switch live from the menu bar, no restart needed.</p></div>
-        </div>
-        <div class="feature-row">
-          <span class="mark">→</span>
-          <div><h3 data-i18n="features.list.4.title">Advanced options, out of the way</h3><p data-i18n="features.list.4.body">Plugins, Azure Document Intelligence, and format hints live in a separate settings dialog.</p></div>
-        </div>
-      </div>
+    <p class="section-lead" data-i18n="features.lead">markitdown is a Python library and a command-line tool: you run it, redirect the output, and manage the files. This puts a window around the same engine.</p>
+    <p class="claim" data-i18n="features.claim">The moment a file converts, its Markdown is in your Downloads folder under the original name. An existing file is never overwritten.</p>
+    <span class="path">~/Downloads/report.md, report (1).md</span>
+    <div class="rows">
+      <div class="row"><h3 data-i18n="features.1.title">A list that answers first</h3><p data-i18n="features.1.body">One line says what is ready and what needs you. Each status has its own mark, so it reads without color.</p></div>
+      <div class="row"><h3 data-i18n="features.2.title">Failures that say why</h3><p data-i18n="features.2.body">"Unsupported format", "disk full", "no text found", with a Retry button on the row and the library's own words in the detail pane.</p></div>
+      <div class="row"><h3 data-i18n="features.3.title">Preview and edit</h3><p data-i18n="features.3.body">Read the rendered result or edit the raw Markdown, then copy it or save a copy elsewhere.</p></div>
+      <div class="row"><h3 data-i18n="features.4.title">Light and dark</h3><p data-i18n="features.4.body">Follows your system, or choose in the View menu.</p></div>
+      <div class="row"><h3 data-i18n="features.5.title">English and Spanish</h3><p data-i18n="features.5.body">Switch live from the menu bar, with no restart.</p></div>
+      <div class="row"><h3 data-i18n="features.6.title">Advanced options, out of the way</h3><p data-i18n="features.6.body">Plugins, Azure Document Intelligence, and format hints live in their own settings dialog.</p></div>
     </div>
   </section>
 
-  <section id="how-it-works" class="reveal">
-    <h2 data-i18n="how.title">How it works</h2>
-    <div class="flow">
-      <div class="flow-step">
-        <span class="flow-num" aria-hidden="true">1</span>
-        <h3 data-i18n="how.1.title">Drop a file</h3>
-        <p data-i18n="how.1.body">Or click the drop zone to browse, or paste a URL.</p>
-      </div>
-      <div class="flow-step">
-        <span class="flow-num" aria-hidden="true">2</span>
-        <h3 data-i18n="how.2.title">It converts</h3>
-        <p data-i18n="how.2.body">Runs in the background. The interface never freezes, even on large batches.</p>
-      </div>
-      <div class="flow-step">
-        <span class="flow-num" aria-hidden="true">3</span>
-        <h3 data-i18n="how.3.title">Find it in Downloads</h3>
-        <p data-i18n-html="how.3.body">The <code>.md</code> file is already there. Double-click the row to open its folder.</p>
-      </div>
-    </div>
-  </section>
-
-  <section id="formats" class="reveal">
+  <section id="formats" class="column">
     <h2 data-i18n="formats.title">Supported formats</h2>
-    <p class="section-lead" data-i18n="formats.lead">Anything markitdown supports:</p>
-    <div class="formats">
-      <span class="pill"><img src="icons/pdf.svg" alt="" />PDF</span>
-      <span class="pill"><img src="icons/word.svg" alt="" />Word</span>
-      <span class="pill"><img src="icons/excel.svg" alt="" />Excel</span>
-      <span class="pill"><img src="icons/powerpoint.svg" alt="" />PowerPoint</span>
-      <span class="pill"><img src="icons/image.svg" alt="" /><span data-i18n="formats.images">Images (EXIF / OCR)</span></span>
-      <span class="pill"><img src="icons/audio.svg" alt="" /><span data-i18n="formats.audio">Audio (transcription)</span></span>
-      <span class="pill"><img src="icons/html5.svg" alt="" />HTML</span>
-      <span class="pill"><img src="icons/csv.svg" alt="" />CSV</span>
-      <span class="pill"><img src="icons/json.svg" alt="" />JSON</span>
-      <span class="pill"><img src="icons/xml.svg" alt="" />XML</span>
-      <span class="pill"><img src="icons/zip.svg" alt="" /><span data-i18n="formats.zip">ZIP archives</span></span>
-      <span class="pill"><img src="icons/epub.svg" alt="" />EPub</span>
-      <span class="pill"><img src="icons/youtube.svg" alt="" /><span data-i18n="formats.youtube">YouTube URLs</span></span>
-      <span class="pill"><img src="icons/web.svg" alt="" /><span data-i18n="formats.web">Web pages</span></span>
-    </div>
+    <p class="section-lead" data-i18n="formats.lead">Anything markitdown supports, including:</p>
+    <ul class="formats">
+      <li><img src="icons/pdf.svg" alt="" />PDF</li>
+      <li><img src="icons/word.svg" alt="" />Word</li>
+      <li><img src="icons/excel.svg" alt="" />Excel</li>
+      <li><img src="icons/powerpoint.svg" alt="" />PowerPoint</li>
+      <li><img src="icons/image.svg" alt="" /><span data-i18n="formats.images">Images (EXIF, OCR with Azure)</span></li>
+      <li><img src="icons/audio.svg" alt="" /><span data-i18n="formats.audio">Audio (transcription)</span></li>
+      <li><img src="icons/html5.svg" alt="" />HTML</li>
+      <li><img src="icons/csv.svg" alt="" />CSV</li>
+      <li><img src="icons/json.svg" alt="" />JSON</li>
+      <li><img src="icons/xml.svg" alt="" />XML</li>
+      <li><img src="icons/zip.svg" alt="" /><span data-i18n="formats.zip">ZIP archives</span></li>
+      <li><img src="icons/epub.svg" alt="" />EPub</li>
+      <li><img src="icons/youtube.svg" alt="" /><span data-i18n="formats.youtube">YouTube links</span></li>
+      <li><img src="icons/web.svg" alt="" /><span data-i18n="formats.web">Web pages</span></li>
+    </ul>
   </section>
 
-  <section id="install" class="reveal">
-    <h2 data-i18n="install.title">Install &amp; run</h2>
-    <p class="section-lead" data-i18n="install.lead">Grab a ready-to-run build for your platform, or run from source.</p>
+  <section id="install" class="column">
+    <h2 data-i18n="install.title">Install and run</h2>
+    <p class="section-lead" data-i18n="install.lead">Get a ready-to-run build for your platform, or run from source.</p>
 
-    <div class="download-list">
+    <div class="downloads">
       <div class="download-row">
-        <div>
-          <p class="platform">Windows<span class="platform-icon platform-icon-windows" aria-hidden="true"><img src="icons/windows.svg" alt="" /></span></p>
-          <p class="platform-note" data-i18n="download.windows.note">Installer or standalone .exe, no Python required.</p>
-        </div>
-        <a class="btn btn-secondary" href="https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop.exe" data-i18n="download.exe.button">Download .exe</a>
+        <div class="platform"><img src="icons/windows.svg" alt="" /><div><h3>Windows</h3><p data-i18n="download.windows.note">Standalone .exe, no Python required.</p></div></div>
+        <a class="btn btn-quiet" href="https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop.exe" data-i18n="download.exe.button">Download .exe</a>
       </div>
       <div class="download-row">
-        <div>
-          <p class="platform">macOS<span class="platform-icon platform-icon-apple" aria-hidden="true"><img src="icons/apple.svg" alt="" /></span></p>
-          <p class="platform-note" data-i18n="download.bundle.note">Packaged app bundle, zipped.</p>
-        </div>
-        <a class="btn btn-secondary" href="https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop-macos.zip" data-i18n="download.zip.button">Download .zip</a>
+        <div class="platform"><img src="icons/apple.svg" alt="" /><div><h3>macOS</h3><p data-i18n="download.bundle.note">Packaged app, zipped.</p></div></div>
+        <a class="btn btn-quiet" href="https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop-macos.zip" data-i18n="download.zip.button">Download .zip</a>
       </div>
       <div class="download-row">
-        <div>
-          <p class="platform">Linux<span class="platform-icon" aria-hidden="true"><img src="icons/linux.svg" alt="" width="18" height="18" /></span></p>
-          <p class="platform-note" data-i18n="download.bundle.note">Packaged app bundle, zipped.</p>
-        </div>
-        <a class="btn btn-secondary" href="https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop-linux.zip" data-i18n="download.zip.button">Download .zip</a>
+        <div class="platform"><img src="icons/linux.svg" alt="" /><div><h3>Linux</h3><p data-i18n="download.bundle.note">Packaged app, zipped.</p></div></div>
+        <a class="btn btn-quiet" href="https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop-linux.zip" data-i18n="download.zip.button">Download .zip</a>
       </div>
     </div>
 
     <h3 class="source-heading" data-i18n="install.source.heading">Run from source</h3>
-    <p class="source-note" data-i18n="install.source.note">For contributors or other platforms. Requires Python 3.10+.</p>
+    <p class="source-note" data-i18n="install.source.note">For contributors or other platforms. Requires Python 3.10 or newer.</p>
 
     <div class="tabs" role="tablist">
       <button class="tab" id="tab-win" role="tab" aria-selected="true" aria-controls="panel-win" tabindex="0" data-target="panel-win">Windows</button>
-      <button class="tab" id="tab-mac" role="tab" aria-selected="false" aria-controls="panel-mac" tabindex="-1" data-target="panel-mac">macOS / Linux</button>
+      <button class="tab" id="tab-mac" role="tab" aria-selected="false" aria-controls="panel-mac" tabindex="-1" data-target="panel-mac">macOS, Linux</button>
     </div>
 
     <div class="tab-panel active" id="panel-win" role="tabpanel" aria-labelledby="tab-win">
@@ -429,132 +316,140 @@ cd markitdown-desktop
 python3 -m pip install -r requirements.txt
 ./run.sh</pre>
     </div>
-  </section>
 
-  <div class="disclaimer" data-i18n-html="disclaimer.body">
-    This is an independent, community-built GUI. It is <strong>not</strong> developed,
-    maintained, or endorsed by Microsoft. It wraps the open-source
-    <a href="https://github.com/microsoft/markitdown">markitdown</a> package (MIT License).
-    All credit for the underlying conversion engine goes to Microsoft and its contributors.
-  </div>
+    <p class="disclaimer" data-i18n-html="disclaimer.body">This is an independent, community-built app. It is <strong>not</strong> developed, maintained, or endorsed by Microsoft. It wraps the open-source <a href="https://github.com/microsoft/markitdown">markitdown</a> package (MIT License), and all credit for the conversion engine goes to Microsoft and its contributors.</p>
+  </section>
 
 </main>
 
 <footer>
-  <p data-i18n="footer.license">MarkItDown Desktop · MIT Licensed</p>
-  <p><a href="https://github.com/andrest04/markitdown-desktop">GitHub</a> · <a href="https://github.com/microsoft/markitdown">markitdown (Microsoft)</a></p>
-  <a class="author-avatar" href="https://github.com/andrest04" target="_blank" rel="noopener noreferrer" aria-label="andrest04 on GitHub">
-    <img src="https://github.com/andrest04.png" alt="" width="40" height="40" />
-  </a>
+  <div class="column">
+    <p data-i18n="footer.license">MarkItDown Desktop, MIT License</p>
+    <p><a href="https://github.com/andrest04/markitdown-desktop">GitHub</a>, <a href="https://github.com/microsoft/markitdown">markitdown (Microsoft)</a>, <a href="https://github.com/andrest04">andrest04</a></p>
+  </div>
 </footer>
 
 <script>
   var TRANSLATIONS = {
     en: {
-      "nav.features": "Features",
+      "nav.label": "Primary",
       "nav.how": "How it works",
+      "nav.features": "Features",
       "nav.formats": "Formats",
       "nav.install": "Install",
       "nav.starAriaLabel": "Star this project on GitHub",
-      "hero.title": "Drop a file. Get Markdown. Done.",
-      "hero.lead": "A free, open-source desktop app for Microsoft's <code>markitdown</code>. Drag any file or paste a URL, and it converts and saves straight to your Downloads folder. No manual export step, no CLI required.",
+      "hero.title": "Drop a file. Get Markdown.",
+      "hero.lead": "A free, open-source desktop app for Microsoft's <code>markitdown</code>. Drop a file anywhere in the window or paste a link, and the <code>.md</code> saves itself to your Downloads folder. No export step, no command line.",
       "cta.windows": "Download for Windows (.exe)",
-      "cta.other": "Download for macOS / Linux",
+      "cta.other": "macOS and Linux",
       "cta.note": "Unofficial, open-source, not affiliated with Microsoft.",
-      "screenshot.alt": "MarkItDown Desktop walkthrough: add a file, it converts, the rendered markdown preview appears",
-      "features.title": "Why this exists",
-      "features.lead": "markitdown itself is a command-line tool: you run it, redirect output, manage files yourself. This wraps the same engine with no export step. Drop a file and the <code>.md</code> lands in Downloads the moment it converts.",
-      "features.primary.title": "Auto-saves to Downloads, always",
-      "features.primary.body": "The moment a file finishes converting, the <code>.md</code> lands in your Downloads folder under its original name. Name collisions get a safe numeric suffix instead of overwriting anything. No export dialog to remember.",
-      "features.list.1.title": "Live preview",
-      "features.list.1.body": "Rendered or raw Markdown, editable before saving a copy elsewhere.",
-      "features.list.2.title": "Light & dark themes",
-      "features.list.2.body": "Follows your system automatically, or switch manually.",
-      "features.list.3.title": "English & Spanish",
-      "features.list.3.body": "Switch live from the menu bar, no restart needed.",
-      "features.list.4.title": "Advanced options, out of the way",
-      "features.list.4.body": "Plugins, Azure Document Intelligence, and format hints live in a separate settings dialog.",
+      "shot.app.alt": "MarkItDown Desktop with five files in its list: three saved to Downloads, one failed with the reason no text found and a Retry button, one converting. The selected file's Markdown is rendered beside the list.",
+      "shot.empty.alt": "The empty window: a highlighted instruction to drop a document anywhere, Add files and Add folder buttons, and a field to paste a link.",
       "how.title": "How it works",
-      "how.1.title": "Drop a file",
-      "how.1.body": "Or click the drop zone to browse, or paste a URL.",
-      "how.2.title": "It converts",
-      "how.2.body": "Runs in the background. The interface never freezes, even on large batches.",
-      "how.3.title": "Find it in Downloads",
-      "how.3.body": "The <code>.md</code> file is already there. Double-click the row to open its folder.",
+      "how.1.title": "Add something",
+      "how.1.body": "Drop files or folders anywhere in the window, use Add files, or paste a webpage or YouTube link.",
+      "how.2.title": "It converts right away",
+      "how.2.body": "In the background, so the window stays usable. One failed file does not stop the rest.",
+      "how.3.title": "It is already in Downloads",
+      "how.3.body": "Then copy the Markdown, open the file, or show it in its folder.",
+      "features.title": "Why this exists",
+      "features.lead": "markitdown is a Python library and a command-line tool: you run it, redirect the output, and manage the files. This puts a window around the same engine.",
+      "features.claim": "The moment a file converts, its Markdown is in your Downloads folder under the original name. An existing file is never overwritten.",
+      "features.1.title": "A list that answers first",
+      "features.1.body": "One line says what is ready and what needs you. Each status has its own mark, so it reads without color.",
+      "features.2.title": "Failures that say why",
+      "features.2.body": "\"Unsupported format\", \"disk full\", \"no text found\", with a Retry button on the row and the library's own words in the detail pane.",
+      "features.3.title": "Preview and edit",
+      "features.3.body": "Read the rendered result or edit the raw Markdown, then copy it or save a copy elsewhere.",
+      "features.4.title": "Light and dark",
+      "features.4.body": "Follows your system, or choose in the View menu.",
+      "features.5.title": "English and Spanish",
+      "features.5.body": "Switch live from the menu bar, with no restart.",
+      "features.6.title": "Advanced options, out of the way",
+      "features.6.body": "Plugins, Azure Document Intelligence, and format hints live in their own settings dialog.",
       "formats.title": "Supported formats",
-      "formats.lead": "Anything markitdown supports:",
-      "formats.images": "Images (EXIF / OCR)",
+      "formats.lead": "Anything markitdown supports, including:",
+      "formats.images": "Images (EXIF, OCR with Azure)",
       "formats.audio": "Audio (transcription)",
       "formats.zip": "ZIP archives",
-      "formats.youtube": "YouTube URLs",
+      "formats.youtube": "YouTube links",
       "formats.web": "Web pages",
-      "install.title": "Install & run",
-      "install.lead": "Grab a ready-to-run build for your platform, or run from source.",
-      "download.windows.note": "Installer or standalone .exe, no Python required.",
-      "download.bundle.note": "Packaged app bundle, zipped.",
+      "install.title": "Install and run",
+      "install.lead": "Get a ready-to-run build for your platform, or run from source.",
+      "download.windows.note": "Standalone .exe, no Python required.",
+      "download.bundle.note": "Packaged app, zipped.",
       "download.exe.button": "Download .exe",
       "download.zip.button": "Download .zip",
       "install.source.heading": "Run from source",
-      "install.source.note": "For contributors or other platforms. Requires Python 3.10+.",
-      "disclaimer.body": "This is an independent, community-built GUI. It is <strong>not</strong> developed, maintained, or endorsed by Microsoft. It wraps the open-source <a href=\"https://github.com/microsoft/markitdown\">markitdown</a> package (MIT License). All credit for the underlying conversion engine goes to Microsoft and its contributors.",
-      "footer.license": "MarkItDown Desktop · MIT Licensed",
+      "install.source.note": "For contributors or other platforms. Requires Python 3.10 or newer.",
+      "disclaimer.body": "This is an independent, community-built app. It is <strong>not</strong> developed, maintained, or endorsed by Microsoft. It wraps the open-source <a href=\"https://github.com/microsoft/markitdown\">markitdown</a> package (MIT License), and all credit for the conversion engine goes to Microsoft and its contributors.",
+      "footer.license": "MarkItDown Desktop, MIT License",
       "lang.switchTo": "ES",
+      "lang.aria": "Switch to Spanish",
     },
     es: {
-      "nav.features": "Funciones",
+      "nav.label": "Principal",
       "nav.how": "Cómo funciona",
+      "nav.features": "Funciones",
       "nav.formats": "Formatos",
       "nav.install": "Instalación",
-      "nav.starAriaLabel": "Marca este proyecto con una estrella en GitHub",
-      "hero.title": "Suelta un archivo. Obtén Markdown. Listo.",
-      "hero.lead": "Una aplicación de escritorio gratuita y de código abierto para <code>markitdown</code> de Microsoft. Arrastra cualquier archivo o pega una URL, y se convierte y se guarda directamente en tu carpeta de Descargas. Sin pasos de exportación manual, sin necesidad de la línea de comandos.",
+      "nav.starAriaLabel": "Marcar este proyecto con una estrella en GitHub",
+      "hero.title": "Suelte un archivo. Obtenga Markdown.",
+      "hero.lead": "Una aplicación de escritorio gratuita y de código abierto para <code>markitdown</code> de Microsoft. Suelte un archivo en cualquier parte de la ventana o pegue un enlace, y el <code>.md</code> se guarda solo en su carpeta de Descargas. Sin pasos de exportación ni línea de comandos.",
       "cta.windows": "Descargar para Windows (.exe)",
-      "cta.other": "Descargar para macOS / Linux",
-      "cta.note": "No oficial, de código abierto, no afiliado con Microsoft.",
-      "screenshot.alt": "Recorrido de MarkItDown Desktop: se añade un archivo, se convierte y aparece la vista previa del markdown renderizado",
-      "features.title": "Por qué existe",
-      "features.lead": "markitdown en sí es una herramienta de línea de comandos: la ejecutas, rediriges la salida y gestionas los archivos tú mismo. Esta aplicación envuelve el mismo motor sin pasos de exportación. Suelta un archivo y el <code>.md</code> llega a Descargas en el momento en que se convierte.",
-      "features.primary.title": "Guarda automáticamente en Descargas, siempre",
-      "features.primary.body": "En cuanto un archivo termina de convertirse, el <code>.md</code> llega a tu carpeta de Descargas con su nombre original. Las colisiones de nombre reciben un sufijo numérico seguro en lugar de sobrescribir nada. No hay que recordar ningún cuadro de exportación.",
-      "features.list.1.title": "Vista previa en vivo",
-      "features.list.1.body": "Markdown renderizado o en bruto, editable antes de guardar una copia en otro lugar.",
-      "features.list.2.title": "Temas claro y oscuro",
-      "features.list.2.body": "Sigue tu sistema automáticamente, o cambia manualmente.",
-      "features.list.3.title": "Inglés y español",
-      "features.list.3.body": "Cambia en vivo desde la barra de menú, sin necesidad de reiniciar.",
-      "features.list.4.title": "Opciones avanzadas, fuera del camino",
-      "features.list.4.body": "Los plugins, Azure Document Intelligence y las sugerencias de formato viven en un cuadro de configuración aparte.",
+      "cta.other": "macOS y Linux",
+      "cta.note": "No oficial, de código abierto, sin afiliación con Microsoft.",
+      "shot.app.alt": "MarkItDown Desktop con cinco archivos en su lista: tres guardados en Descargas, uno fallido con el motivo no se encontró texto y un botón Reintentar, y uno convirtiéndose. El Markdown del archivo seleccionado se muestra junto a la lista.",
+      "shot.empty.alt": "La ventana vacía: una instrucción resaltada para soltar un documento en cualquier parte, los botones Agregar archivos y Agregar carpeta, y un campo para pegar un enlace.",
       "how.title": "Cómo funciona",
-      "how.1.title": "Suelta un archivo",
-      "how.1.body": "O haz clic en la zona de arrastre para explorar, o pega una URL.",
-      "how.2.title": "Se convierte",
-      "how.2.body": "Se ejecuta en segundo plano. La interfaz nunca se congela, incluso con lotes grandes.",
-      "how.3.title": "Encuéntralo en Descargas",
-      "how.3.body": "El archivo <code>.md</code> ya está ahí. Haz doble clic en la fila para abrir su carpeta.",
+      "how.1.title": "Agregue algo",
+      "how.1.body": "Suelte archivos o carpetas en cualquier parte de la ventana, use Agregar archivos o pegue un enlace de una página web o de YouTube.",
+      "how.2.title": "Se convierte de inmediato",
+      "how.2.body": "En segundo plano, así que la ventana sigue disponible. Un archivo que falla no detiene a los demás.",
+      "how.3.title": "Ya está en Descargas",
+      "how.3.body": "Después puede copiar el Markdown, abrir el archivo o verlo en su carpeta.",
+      "features.title": "Por qué existe",
+      "features.lead": "markitdown es una biblioteca de Python y una herramienta de línea de comandos: se ejecuta, se redirige la salida y se gestionan los archivos a mano. Esta aplicación pone una ventana alrededor del mismo motor.",
+      "features.claim": "En cuanto un archivo se convierte, su Markdown está en la carpeta de Descargas con el nombre original. Un archivo existente nunca se sobrescribe.",
+      "features.1.title": "Una lista que responde primero",
+      "features.1.body": "Una línea indica qué está listo y qué requiere su atención. Cada estado tiene su propia marca, así que se entiende sin color.",
+      "features.2.title": "Fallos que explican el motivo",
+      "features.2.body": "\"Formato no compatible\", \"disco lleno\", \"no se encontró texto\", con un botón Reintentar en la fila y el texto de la biblioteca en el panel de detalle.",
+      "features.3.title": "Vista previa y edición",
+      "features.3.body": "Lea el resultado o edite el Markdown, y después cópielo o guarde una copia en otro lugar.",
+      "features.4.title": "Claro y oscuro",
+      "features.4.body": "Sigue al sistema, o se elige en el menú Ver.",
+      "features.5.title": "Inglés y español",
+      "features.5.body": "Se cambia al instante desde la barra de menús, sin reiniciar.",
+      "features.6.title": "Opciones avanzadas, aparte",
+      "features.6.body": "Los plugins, Azure Document Intelligence y las indicaciones de formato están en su propio cuadro de configuración.",
       "formats.title": "Formatos compatibles",
-      "formats.lead": "Todo lo que markitdown admite:",
-      "formats.images": "Imágenes (EXIF / OCR)",
+      "formats.lead": "Todo lo que markitdown admite, por ejemplo:",
+      "formats.images": "Imágenes (EXIF, OCR con Azure)",
       "formats.audio": "Audio (transcripción)",
       "formats.zip": "Archivos ZIP",
-      "formats.youtube": "URLs de YouTube",
+      "formats.youtube": "Enlaces de YouTube",
       "formats.web": "Páginas web",
       "install.title": "Instalación y ejecución",
-      "install.lead": "Obtén una compilación lista para usar en tu plataforma, o ejecútalo desde el código fuente.",
-      "download.windows.note": "Instalador o .exe independiente, no requiere Python.",
-      "download.bundle.note": "Paquete de aplicación empaquetado, comprimido.",
+      "install.lead": "Descargue una compilación lista para su plataforma, o ejecútela desde el código fuente.",
+      "download.windows.note": "Archivo .exe independiente, no requiere Python.",
+      "download.bundle.note": "Aplicación empaquetada, comprimida.",
       "download.exe.button": "Descargar .exe",
       "download.zip.button": "Descargar .zip",
       "install.source.heading": "Ejecutar desde el código fuente",
-      "install.source.note": "Para colaboradores u otras plataformas. Requiere Python 3.10+.",
-      "disclaimer.body": "Esta es una interfaz gráfica independiente, construida por la comunidad. <strong>No</strong> está desarrollada, mantenida ni respaldada por Microsoft. Envuelve el paquete de código abierto <a href=\"https://github.com/microsoft/markitdown\">markitdown</a> (licencia MIT). Todo el crédito del motor de conversión subyacente es de Microsoft y sus colaboradores.",
-      "footer.license": "MarkItDown Desktop · Licencia MIT",
+      "install.source.note": "Para colaboradores u otras plataformas. Requiere Python 3.10 o posterior.",
+      "disclaimer.body": "Esta es una aplicación independiente, creada por la comunidad. <strong>No</strong> está desarrollada, mantenida ni respaldada por Microsoft. Envuelve el paquete de código abierto <a href=\"https://github.com/microsoft/markitdown\">markitdown</a> (licencia MIT), y todo el mérito del motor de conversión es de Microsoft y sus colaboradores.",
+      "footer.license": "MarkItDown Desktop, licencia MIT",
       "lang.switchTo": "EN",
+      "lang.aria": "Cambiar a inglés",
     },
   };
 
   (function () {
     var STORAGE_KEY = "markitdown-desktop-landing-lang";
+    var root = document.documentElement;
     var toggle = document.getElementById("langToggle");
+    var darkScheme = window.matchMedia("(prefers-color-scheme: dark)");
 
     function detectInitialLang() {
       var stored = null;
@@ -563,9 +458,17 @@ python3 -m pip install -r requirements.txt
       return navigator.language && navigator.language.toLowerCase().indexOf("es") === 0 ? "es" : "en";
     }
 
+    // Each picture shows the app in the page's own theme and language.
+    function applyShots() {
+      var theme = root.getAttribute("data-theme") || (darkScheme.matches ? "dark" : "light");
+      document.querySelectorAll("[data-shot]").forEach(function (img) {
+        img.src = "screenshots/" + img.getAttribute("data-shot") + "-" + theme + "-" + root.lang + ".png";
+      });
+    }
+
     function applyLang(lang) {
       var dict = TRANSLATIONS[lang] || TRANSLATIONS.en;
-      document.documentElement.lang = lang;
+      root.lang = lang;
 
       document.querySelectorAll("[data-i18n]").forEach(function (el) {
         var key = el.getAttribute("data-i18n");
@@ -584,8 +487,9 @@ python3 -m pip install -r requirements.txt
         if (dict[key]) el.setAttribute("aria-label", dict[key]);
       });
 
-      if (toggle) toggle.textContent = dict["lang.switchTo"];
-      toggle.setAttribute("aria-label", lang === "en" ? "Switch to Spanish" : "Cambiar a inglés");
+      toggle.textContent = dict["lang.switchTo"];
+      toggle.setAttribute("aria-label", dict["lang.aria"]);
+      applyShots();
 
       try { localStorage.setItem(STORAGE_KEY, lang); } catch (e) { /* storage unavailable */ }
     }
@@ -593,12 +497,11 @@ python3 -m pip install -r requirements.txt
     var currentLang = detectInitialLang();
     applyLang(currentLang);
 
-    if (toggle) {
-      toggle.addEventListener("click", function () {
-        currentLang = currentLang === "en" ? "es" : "en";
-        applyLang(currentLang);
-      });
-    }
+    toggle.addEventListener("click", function () {
+      currentLang = currentLang === "en" ? "es" : "en";
+      applyLang(currentLang);
+    });
+    if (darkScheme.addEventListener) darkScheme.addEventListener("change", applyShots);
   })();
 
   (function () {
@@ -610,19 +513,12 @@ python3 -m pip install -r requirements.txt
         t.setAttribute("tabindex", "-1");
       });
       document.querySelectorAll(".tab-panel").forEach(function (p) {
-        p.classList.remove("active", "in");
+        p.classList.remove("active");
       });
       tab.setAttribute("aria-selected", "true");
       tab.setAttribute("tabindex", "0");
       if (focusTab) tab.focus();
-
-      var panel = document.getElementById(tab.dataset.target);
-      panel.classList.add("active");
-      // Defer the opacity flip a frame so the display swap above is committed
-      // first — this is what makes the cross-fade transition actually run.
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () { panel.classList.add("in"); });
-      });
+      document.getElementById(tab.dataset.target).classList.add("active");
     }
 
     tabs.forEach(function (tab, i) {
@@ -634,9 +530,6 @@ python3 -m pip install -r requirements.txt
         activateTab(tabs[next], true);
       });
     });
-
-    var initialPanel = document.querySelector(".tab-panel.active");
-    if (initialPanel) requestAnimationFrame(function () { initialPanel.classList.add("in"); });
   })();
 
   (function () {
@@ -652,24 +545,7 @@ python3 -m pip install -r requirements.txt
         var n = data.stargazers_count;
         el.textContent = n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n);
       })
-      .catch(function () { /* offline or rate-limited: button still works without a count */ });
-  })();
-
-  (function () {
-    var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduceMotion || !("IntersectionObserver" in window)) return;
-
-    var targets = document.querySelectorAll(".reveal, .screenshot-frame");
-    var observer = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("in-view");
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.1 });
-
-    targets.forEach(function (el) { observer.observe(el); });
+      .catch(function () { /* offline or rate-limited: the link still works without a count */ });
   })();
 </script>
 

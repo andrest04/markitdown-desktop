@@ -52,3 +52,14 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -m unittest discover -s tests
+
+      # Measures how close each test module brings True to deallocation, since the
+      # suite aborts at exit on Linux only (bool_dealloc). Runs after the suite, even
+      # when it fails, and cannot change the job's result. Remove once that is understood.
+      - name: Shutdown refcount probe (Linux, cannot fail the job)
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        continue-on-error: true
+        timeout-minutes: 30
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python tests/shutdown_refcount_probe.py

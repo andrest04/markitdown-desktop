@@ -15,7 +15,9 @@ Core UX contract (do not break when changing things): **drop a file,
 paste a URL, or click to browse → conversion starts immediately → the
 resulting `.md` is auto-saved to `~/Downloads` with no export step.**
 Everything else (preview tabs, "save a copy elsewhere", advanced Azure
-settings) is secondary and must stay out of that primary path.
+settings) is secondary and must stay out of that primary path. The one
+exception: output with no text is a failure with its own reason, never an
+empty `.md`.
 
 ## Commands
 
@@ -84,7 +86,8 @@ nothing test-related should be left in the user's actual Downloads folder.
   `ConversionOptions.build_markitdown()` maps the
   GUI's option toggles to real `MarkItDown(...)` constructor kwargs
   (`enable_plugins`, `docintel_endpoint`, `cu_endpoint`, `cu_analyzer_id`).
-  `convert_item()` maps per-item extension/mimetype/charset overrides to a
+  `convert_item()` raises `NoTextFound` on whitespace-only output, which
+  markitdown does not, and maps per-item extension/mimetype/charset overrides to a
   `StreamInfo` object and calls `convert_local()` or `convert_uri()`
   depending on `SourceKind`. `auto_save_markdown()` / `get_downloads_dir()`
   / `unique_download_path()` implement the Downloads auto-save contract
@@ -138,8 +141,12 @@ nothing test-related should be left in the user's actual Downloads folder.
     Selection is a quiet fill plus a `mark` stroke behind the file name only.
     Rows needing it paint a retry in one fixed column (`retry_rect()`,
     `retry_requested`); Enter on the focused row does the same, from
-    `MainWindow.eventFilter`. This module also holds the pane's tested helpers,
-    `queue_summary()`, `detail_status()`, `row_tooltip()` and `word_count()`.
+    `MainWindow.eventFilter`. Delete removes rows only while the list has
+    focus (`WidgetShortcut`), so a file drop hands the list focus unless
+    someone is typing or a dialog is open, and removing rows selects the row
+    now at the first removed position. `row_tooltip()` lives here too.
+  - `queue_text.py` — plain functions for the pane's words: `queue_summary()`,
+    `detail_status()` and `word_count()`.
   - `status_mark.py` — `StatusMark` and `paint_status_glyph()`, one silhouette
     per state, which the delegate paints too.
   - `brand_mark.py` — `BrandMark` and `paint_brand_mark()`.
@@ -203,7 +210,10 @@ Qt's `styleHints().colorScheme()`: the app palette cannot answer, because
 
 - `ci.yml` — on every push/PR to `main`: `ruff check .`, `python -m
   compileall`, the headless smoke test above, and `python -m unittest discover
-  -s tests`, matrixed across windows-latest/macos-latest/ubuntu-latest.
+  -s tests`, matrixed across windows-latest/macos-latest/ubuntu-latest. On
+  Linux, `tests/shutdown_refcount_probe.py` runs after the suite, even when it
+  fails, and cannot change the job's result: a temporary diagnostic for the
+  suite's abort at interpreter exit (`bool_dealloc`).
 - `release.yml` — on any `vX.Y.Z` tag push: builds a PyInstaller
   `--onedir --windowed` bundle per OS (`--collect-all markitdown
   --collect-all magika`, needed because both do dynamic/plugin-style

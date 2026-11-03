@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -66,12 +67,8 @@ from app.ui.about_dialog import AboutDialog
 from app.ui.advanced_settings_dialog import AdvancedSettingsDialog
 from app.ui.brand_mark import BrandMark
 from app.ui.drop_zone import EMPTY_GUTTER, DropZone, center_column, empty_column_left
-from app.ui.queue_delegate import (
-    ROW_HEIGHT,
-    QueueItemDelegate,
-    detail_status,
-    queue_summary,
-)
+from app.ui.queue_delegate import ROW_HEIGHT, QueueItemDelegate
+from app.ui.queue_text import detail_status, queue_summary
 from app.ui.status_mark import StatusMark
 from app.ui.theme import (
     PREVIEW_MARGIN,
@@ -314,7 +311,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(0)
 
         self.drop_zone = DropZone(
-            self._add_paths,
+            self._on_paths_dropped,
             on_click=self.action_add_files,
             on_url=self.action_add_url,
             on_folder=self.action_add_folder,
@@ -656,7 +653,11 @@ class MainWindow(QMainWindow):
         self._sync_language_buttons()
 
     def _install_shortcuts(self) -> None:
-        QShortcut(QKeySequence.StandardKey.Delete, self.table_view, self.action_remove_selected)
+        # Only while the list has focus: a button keeps its key to itself, and the
+        # text fields already keep Delete from a window shortcut.
+        remove_shortcut = QShortcut(QKeySequence.StandardKey.Delete, self.table_view, self.action_remove_selected)
+        # Set apart: PySide6 ignores a `context=` argument given to this constructor.
+        remove_shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
         # The pane reads top to bottom, and so does the keyboard.
         zone = self.drop_zone
         for first, second in (
@@ -795,6 +796,23 @@ class MainWindow(QMainWindow):
         if folder:
             self._add_paths([folder])
 
+    def _on_paths_dropped(self, paths: list[str]) -> None:
+        self._add_paths(paths)
+        self._focus_list_after_drop()
+
+    def _focus_list_after_drop(self) -> None:
+        """Give the list the keyboard, since Delete only works from there.
+
+        A drop arrives from outside the window, so it may find someone typing or
+        a dialog open, and those keep the focus they have.
+        """
+        if QApplication.activeModalWidget() is not None or QApplication.activeWindow() not in (None, self):
+            return
+        if isinstance(self.focusWidget(), (QLineEdit, QPlainTextEdit)):
+            return
+        if self.model.rowCount():
+            self.table_view.setFocus()
+
     def _add_paths(self, paths: list[str]) -> None:
         classified = classify_paths(paths)
         new_items: list[QueueItem] = []
@@ -844,6 +862,10 @@ class MainWindow(QMainWindow):
             items = [self.model.item_at(row) for row in rows]
             self.model.remove_rows(rows)
             self.conversion_queue.discard(items)
+            # Removing a row empties the selection, and Delete needs one to act again.
+            last_row = self.model.rowCount() - 1
+            if last_row >= 0:
+                self.table_view.selectRow(min(rows[0], last_row))
             self._refresh_preview()
 
     def action_clear_all(self) -> None:
@@ -899,7 +921,12 @@ class MainWindow(QMainWindow):
         self.progress_bar.raise_()
 
     def _on_batch_finished(self) -> None:
-        self.status_bar.showMessage(tr("status.batch_complete"), 4000)
+        # A failure on the last item running reports after this, so it stays on screen.
+        summary = queue_summary(self.model.items())
+        if summary is not None and summary.attention:
+            self.status_bar.showMessage(tr("status.batch_complete_problems", summary=summary.headline), 6000)
+        else:
+            self.status_bar.showMessage(tr("status.batch_complete"), 4000)
         self.progress_bar.setVisible(False)
 
     def _selected_row(self) -> int:

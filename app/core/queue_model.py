@@ -51,6 +51,7 @@ class FailureReason(Enum):
     FILE_NOT_FOUND = "error.file_not_found"
     PERMISSION_DENIED = "error.permission_denied"
     NETWORK = "error.network"
+    NO_TEXT = "error.no_text"
     GENERIC = "error.generic"
     DISK_FULL = "error.disk_full"
     SAVE_GENERIC = "error.save_generic"

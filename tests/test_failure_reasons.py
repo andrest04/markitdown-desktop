@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import errno
 import socket
+import struct
 import sys
 import tempfile
 import threading
@@ -27,21 +28,32 @@ from azure.core.exceptions import (
     ServiceRequestError,
     ServiceResponseError,
 )
-from markitdown import FileConversionException
-from markitdown._exceptions import FailedConversionAttempt
+from markitdown import (
+    DocumentConverter,
+    FailedConversionAttempt,
+    FileConversionException,
+    MarkItDown,
+)
 from qt_support import WindowTestCase, process_events, pump_until, settle
 
 from app.core.converter import (
     ConversionOptions,
+    NoTextFound,
     classify_conversion_error,
     classify_save_error,
     convert_item,
     export_markdown,
 )
-from app.core.queue_model import FailureReason, ItemStatus, QueueItem, SourceKind
+from app.core.queue_model import (
+    FailureReason,
+    ItemStatus,
+    QueueItem,
+    SourceKind,
+    row_status_text,
+)
 from app.i18n import LANG_EN, LANG_ES, TRANSLATIONS, tr
 from app.i18n import manager as i18n_manager
-from app.ui.queue_delegate import detail_status, row_status_text
+from app.ui.queue_text import detail_status
 
 
 def _file_item(path: Path) -> QueueItem:
@@ -50,6 +62,10 @@ def _file_item(path: Path) -> QueueItem:
 
 def _url_item(url: str) -> QueueItem:
     return QueueItem(source=url, kind=SourceKind.URL, display_name=url)
+
+
+def _png_chunk(kind: bytes, data: bytes) -> bytes:
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
 
 
 class RealConversionFailureTests(unittest.TestCase):
@@ -75,6 +91,19 @@ class RealConversionFailureTests(unittest.TestCase):
     def test_a_missing_file(self):
         self.assertIs(self.reason_for(_file_item(self.folder / "gone.txt")), FailureReason.FILE_NOT_FOUND)
 
+    def test_a_file_with_nothing_visible_has_no_text(self):
+        for name, data in (
+            ("bom_only.txt", b"\xef\xbb\xbf"),
+            ("zero_width.txt", "\u200b\u200b\n".encode()),
+            ("mixed.txt", "\ufeff \u200b\u00a0\u2029\t\r\n\u00ad".encode()),
+        ):
+            with self.subTest(file=name):
+                self.assertIs(self.reason_for(self.write(name, data)), FailureReason.NO_TEXT)
+
+    def test_text_behind_a_bom_still_converts(self):
+        text = convert_item(self.write("bom_text.txt", b"\xef\xbb\xbfhello"), ConversionOptions())
+        self.assertIn("hello", text)
+
     def test_an_unsupported_format(self):
         item = self.write("data.dat", bytes(range(256)) * 4)
         self.assertIs(self.reason_for(item), FailureReason.UNSUPPORTED_FORMAT)
@@ -95,6 +124,27 @@ class RealConversionFailureTests(unittest.TestCase):
         ):
             with self.subTest(name=name):
                 self.assertIs(self.reason_for(self.write(name, data)), FailureReason.UNREADABLE_FILE)
+
+    def test_output_with_no_text_is_a_failure_of_its_own(self):
+        # markitdown raises nothing for any of these: it returns empty text.
+        header = struct.pack(">IIBBBBB", 1, 1, 8, 0, 0, 0, 0)
+        valid_png = (
+            b"\x89PNG\r\n\x1a\n"
+            + _png_chunk(b"IHDR", header)
+            + _png_chunk(b"IDAT", zlib.compress(b"\0\0"))
+            + _png_chunk(b"IEND", b"")
+        )
+        for name, data in (
+            ("garbage.png", b"this is not an image"),
+            ("blank.png", valid_png),
+            ("empty.txt", b""),
+            ("spaces.txt", b"  \n\t\r\n  "),
+        ):
+            with self.subTest(name=name):
+                self.assertIs(self.reason_for(self.write(name, data)), FailureReason.NO_TEXT)
+
+    def test_output_with_text_comes_back(self):
+        self.assertIn("hello", convert_item(self.write("a.txt", b"hello"), ConversionOptions()))
 
     def _pcm_wav(self, name: str) -> QueueItem:
         path = self.folder / name
@@ -132,13 +182,19 @@ class RealConversionFailureTests(unittest.TestCase):
             self.assertIs(self.reason_for(item), FailureReason.PERMISSION_DENIED)
 
     def test_a_missing_optional_dependency(self):
-        try:
-            raise ImportError("no module named pdfminer")
-        except ImportError:
-            exc_info = sys.exc_info()
-        item = self.write("empty.pdf", b"")
-        with mock.patch("markitdown.converters._pdf_converter._dependency_exc_info", exc_info):
-            self.assertIs(self.reason_for(item), FailureReason.MISSING_DEPENDENCY)
+        class NeedsAPackage(DocumentConverter):
+            """What a converter does when its optional package is not installed."""
+
+            def accepts(self, file_stream, stream_info, **kwargs):
+                return True
+
+            def convert(self, file_stream, stream_info, **kwargs):
+                raise markitdown.MissingDependencyException("install the extra")
+
+        md = MarkItDown()
+        md.register_converter(NeedsAPackage())
+        with mock.patch.object(ConversionOptions, "build_markitdown", return_value=md):
+            self.assertIs(self.reason_for(self.write("data.dat", bytes(range(256)) * 4)), FailureReason.MISSING_DEPENDENCY)
 
     def test_a_refused_connection(self):
         with socket.socket() as probe:
@@ -163,6 +219,26 @@ class RealConversionFailureTests(unittest.TestCase):
 
         url = f"http://127.0.0.1:{server.server_address[1]}/a.html"
         self.assertIs(self.reason_for(_url_item(url)), FailureReason.NETWORK)
+
+
+class VisibleTextTests(unittest.TestCase):
+    """What counts as text, whatever a converter hands back."""
+
+    def _convert_returning(self, text):
+        engine = mock.Mock()
+        engine.convert_local.return_value = mock.Mock(text_content=text)
+        with mock.patch.object(ConversionOptions, "build_markitdown", return_value=engine):
+            return convert_item(_file_item(Path("a.txt")), ConversionOptions())
+
+    def test_output_with_no_visible_character_is_no_text(self):
+        for text in (None, "", " \n\t", "\u200b", "\ufeff", "\u200b\u200d\u2060", "\u00a0\u3000", "\x00\x1f"):
+            with self.subTest(text=text), self.assertRaises(NoTextFound):
+                self._convert_returning(text)
+
+    def test_any_visible_character_counts_and_comes_back_unchanged(self):
+        for text in ("a", "\ufeffa", "\u200b1\u200b", "\u65e5\u672c\u8a9e", "\U0001f642", "-"):
+            with self.subTest(text=text):
+                self.assertEqual(self._convert_returning(text), text)
 
 
 class ClassificationTests(unittest.TestCase):
@@ -285,6 +361,14 @@ class TextTests(unittest.TestCase):
                 english, spanish = (TRANSLATIONS[lang][reason.value] for lang in (LANG_EN, LANG_ES))
                 self.assertNotEqual(english, spanish)
 
+    def test_no_text_says_what_happened_without_blaming_the_file(self):
+        item = self._failed(FailureReason.NO_TEXT, "")
+        self.assertEqual(row_status_text(item), "Failed: no text found")
+        self.assertEqual(detail_status(item), "No text found")
+        i18n_manager._language = LANG_ES
+        self.assertEqual(row_status_text(item), "Falló: no se encontró texto")
+        self.assertEqual(detail_status(item), "No se encontró texto")
+
     def test_the_row_and_header_name_the_reason_in_the_interface_language(self):
         item = self._failed()
         self.assertEqual(row_status_text(item), "Failed: damaged or unreadable file")
@@ -384,6 +468,42 @@ class WindowTests(WindowTestCase):
 
         self.assertEqual(message, tr("status.autosave_failed", error="disco lleno"))
         self.assertNotIn("No space left", message)
+
+    def _convert_for_real(self):
+        return mock.patch("app.core.converter.convert_item", convert_item)
+
+    def test_a_document_with_no_text_fails_and_writes_nothing(self):
+        source = self.make_source("blank.txt")
+        Path(source).write_text(" \n ", encoding="utf-8")
+        with self._convert_for_real():
+            self.window._add_paths([source])
+            self.assertTrue(pump_until(lambda: self.item_named("blank.txt").status == ItemStatus.ERROR))
+            settle()
+        item = self.item_named("blank.txt")
+        self.assertIs(item.error_reason, FailureReason.NO_TEXT)
+        self.assertEqual(self.downloaded_names(), [])
+        self.window.table_view.selectRow(0)
+        process_events()
+        self.assertEqual(self.window.preview_header_status.text(), "No text found")
+        self.assertFalse(self.window.retry_header_btn.isHidden())
+
+    def test_a_retry_that_finds_no_text_keeps_the_earlier_file(self):
+        source = self.make_source("a.txt")
+        with self._convert_for_real():
+            self.window._add_paths([source])
+            self.assertTrue(pump_until(lambda: self.item_named("a.txt").saved_path))
+            settle()
+            item = self.item_named("a.txt")
+            saved_path = item.saved_path
+
+            Path(source).write_text("", encoding="utf-8")
+            self.window._start_conversion([0])
+            self.assertTrue(pump_until(lambda: item.status == ItemStatus.ERROR))
+            settle()
+
+        self.assertIs(item.error_reason, FailureReason.NO_TEXT)
+        self.assertEqual(item.saved_path, saved_path)
+        self.assertEqual(self.downloaded_names(), ["a.md"])
 
     def test_save_copy_failure_gives_the_reason_in_the_interface_language(self):
         self.add_sources("a.txt")
