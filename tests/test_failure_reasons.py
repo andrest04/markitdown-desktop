@@ -13,11 +13,20 @@ import tempfile
 import threading
 import unittest
 import warnings
+import wave
+import zlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from unittest import mock
+from urllib.error import URLError
 
 import markitdown
+import speech_recognition
+from azure.core.exceptions import (
+    HttpResponseError,
+    ServiceRequestError,
+    ServiceResponseError,
+)
 from markitdown import FileConversionException
 from markitdown._exceptions import FailedConversionAttempt
 from qt_support import WindowTestCase, process_events, pump_until, settle
@@ -79,9 +88,35 @@ class RealConversionFailureTests(unittest.TestCase):
             ("broken.xlsx", zip_header),
             ("broken.pptx", zip_header),
             ("broken.zip", zip_header),
+            ("broken.epub", zip_header),
+            # An OLE2 header with nothing behind it reaches xlrd's CompDocError.
+            ("broken.xls", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"\0" * 600),
+            ("broken.rss", b"<rss><<<"),
         ):
             with self.subTest(name=name):
                 self.assertIs(self.reason_for(self.write(name, data)), FailureReason.UNREADABLE_FILE)
+
+    def _pcm_wav(self, name: str) -> QueueItem:
+        path = self.folder / name
+        with wave.open(str(path), "wb") as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(2)
+            audio.setframerate(16000)
+            audio.writeframes(b"\0\0" * 1600)
+        return _file_item(path)
+
+    def _recognizer_raises(self, error: Exception):
+        # The one call that leaves the machine, so no test reaches the real service.
+        return mock.patch.object(speech_recognition.Recognizer, "recognize_google", side_effect=error)
+
+    def test_a_good_recording_while_offline_is_the_network_not_the_file(self):
+        error = speech_recognition.RequestError("recognition connection failed")
+        with self._recognizer_raises(error):
+            self.assertIs(self.reason_for(self._pcm_wav("good.wav")), FailureReason.NETWORK)
+
+    def test_a_recording_with_no_recognizable_speech_is_not_called_damaged(self):
+        with self._recognizer_raises(speech_recognition.UnknownValueError()):
+            self.assertIs(self.reason_for(self._pcm_wav("silent.wav")), FailureReason.GENERIC)
 
     def test_permission_denied(self):
         # A patch, because chmod cannot deny the owner on Windows or root elsewhere.
@@ -157,6 +192,48 @@ class ClassificationTests(unittest.TestCase):
         self.assertIs(classify_conversion_error(error), FailureReason.UNREADABLE_FILE)
         self.assertIs(classify_conversion_error(self._attempts(error)), FailureReason.UNREADABLE_FILE)
 
+    def test_network_errors_inside_an_attempt_are_the_network_reason(self):
+        class ConnectTimeout(speech_recognition.RequestError):
+            """A subclass in the same family counts as well."""
+
+        for error in (
+            speech_recognition.RequestError("offline"),
+            ConnectTimeout("offline"),
+            ServiceRequestError("no route"),
+            ServiceResponseError("reset"),
+            URLError("no route"),
+            ConnectionResetError("reset"),
+        ):
+            with self.subTest(error=type(error).__name__):
+                self.assertIs(classify_conversion_error(self._attempts(error)), FailureReason.NETWORK)
+
+    def test_a_url_error_is_the_network_outside_an_attempt_too(self):
+        # URLError is an OSError, which would otherwise read as an unreadable file.
+        self.assertIs(classify_conversion_error(URLError("no route")), FailureReason.NETWORK)
+
+    def test_an_unknown_cause_never_claims_the_file_is_damaged(self):
+        for error in (
+            TypeError("library bug"),
+            ValueError("x"),
+            KeyError("x"),
+            HttpResponseError("401 from the service"),
+            OSError("something else"),
+            RuntimeError("boom"),
+        ):
+            with self.subTest(error=type(error).__name__):
+                self.assertIs(classify_conversion_error(self._attempts(error)), FailureReason.GENERIC)
+
+    def test_a_format_error_is_evidence_of_damage(self):
+        class PDFSyntaxError(Exception):
+            """Stands in for pdfminer's, which goes by name since it is optional."""
+
+        for error in (zlib.error("bad data"), PDFSyntaxError("no /Root")):
+            with self.subTest(error=type(error).__name__):
+                self.assertIs(
+                    classify_conversion_error(self._attempts(TypeError("other attempt"), error)),
+                    FailureReason.UNREADABLE_FILE,
+                )
+
     def test_anything_else_is_the_generic_reason(self):
         self.assertIs(classify_conversion_error(RuntimeError("boom")), FailureReason.GENERIC)
         self.assertIs(classify_conversion_error(FileConversionException()), FailureReason.GENERIC)
@@ -195,6 +272,12 @@ class TextTests(unittest.TestCase):
         item.mark_converted("# a")
         item.mark_save_failed(message, reason)
         return item
+
+    def test_the_network_reason_also_fits_a_file_needing_a_service(self):
+        # A local recording fails this way, and it has no link to speak of.
+        self.assertEqual(tr(FailureReason.NETWORK.value), "connection or link unavailable")
+        i18n_manager._language = LANG_ES
+        self.assertEqual(tr(FailureReason.NETWORK.value), "conexión o enlace no disponible")
 
     def test_every_reason_exists_in_both_languages_and_differs(self):
         for reason in FailureReason:

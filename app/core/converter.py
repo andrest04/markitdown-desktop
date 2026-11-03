@@ -39,11 +39,15 @@ import socket
 import ssl
 import threading
 import warnings
+import zlib
 from dataclasses import dataclass, field
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from pathlib import Path
+from urllib.error import URLError
 from urllib.parse import urlparse
+from xml.parsers.expat import ExpatError
+from zipfile import BadZipFile
 
 # pydub (pulled in by markitdown audio converters) warns on import when
 # ffmpeg is missing. Audio transcription is optional; surface real failures
@@ -257,29 +261,50 @@ def convert_item(item: QueueItem, options: ConversionOptions) -> str:
 
 # Every one of these is an OSError, or an IOError in the case of requests, so
 # they have to be checked before the file errors below.
-_NETWORK_ERRORS = (RequestException, ConnectionError, TimeoutError, socket.gaierror, ssl.SSLError)
+_NETWORK_ERRORS = (RequestException, URLError, ConnectionError, TimeoutError, socket.gaierror, ssl.SSLError)
+# These come from optional libraries, so they go by class name instead of an
+# import: speech_recognition's RequestError, and Azure's failures to reach the
+# service. Azure's HttpResponseError is left out, since the service did answer.
+_NETWORK_ERROR_NAMES = {"RequestError", "ServiceRequestError", "ServiceResponseError"}
+# What a format parser raises on contents it cannot make sense of. The names are
+# pdfminer's, xlrd's and Pillow's, optional like the ones above.
+_DAMAGED_FILE_ERRORS = (BadZipFile, zlib.error, ExpatError)
+_DAMAGED_FILE_ERROR_NAMES = {"PDFSyntaxError", "CompDocError", "XLRDError", "UnidentifiedImageError"}
 _NO_ROOM = {errno.ENOSPC, getattr(errno, "EDQUOT", errno.ENOSPC)}
 _NOT_ALLOWED = {errno.EACCES, errno.EPERM, errno.EROFS}
+
+
+def _has_class_named(error: Exception, names: set[str]) -> bool:
+    return any(cls.__name__ in names for cls in type(error).__mro__)
+
+
+def _is_network_error(error: Exception) -> bool:
+    return isinstance(error, _NETWORK_ERRORS) or _has_class_named(error, _NETWORK_ERROR_NAMES)
+
+
+def _is_damaged_file_error(error: Exception) -> bool:
+    return isinstance(error, _DAMAGED_FILE_ERRORS) or _has_class_named(error, _DAMAGED_FILE_ERROR_NAMES)
 
 
 def _classify_attempts(error: FileConversionException) -> FailureReason:
     """A converter recognized the file and then failed on it.
 
     markitdown wraps what each attempt raised, and the source already opened by
-    then. So a FileNotFoundError here is a helper program, such as ffmpeg for
-    audio, and most anything else means the contents are not what they claim:
-    in practice BadZipFile, PDFSyntaxError, CompDocError, even a bare ValueError.
+    then, so a FileNotFoundError here is a helper program, such as ffmpeg for
+    audio. Telling someone their file is damaged is a claim about their file, so
+    it takes an error that says so. A bare ValueError or KeyError does not: a
+    library bug raises those as well, and the raw text stays in the detail pane.
     """
     errors = [attempt.exc_info[1] for attempt in error.attempts or [] if attempt.exc_info]
-    if not errors:
-        return FailureReason.GENERIC
     if any(isinstance(exc, (MissingDependencyException, FileNotFoundError)) for exc in errors):
         return FailureReason.MISSING_DEPENDENCY
-    if any(isinstance(exc, _NETWORK_ERRORS) for exc in errors):
+    if any(_is_network_error(exc) for exc in errors):
         return FailureReason.NETWORK
     if any(isinstance(exc, PermissionError) for exc in errors):
         return FailureReason.PERMISSION_DENIED
-    return FailureReason.UNREADABLE_FILE
+    if any(_is_damaged_file_error(exc) for exc in errors):
+        return FailureReason.UNREADABLE_FILE
+    return FailureReason.GENERIC
 
 
 def classify_conversion_error(error: Exception) -> FailureReason:
@@ -290,7 +315,7 @@ def classify_conversion_error(error: Exception) -> FailureReason:
         return FailureReason.MISSING_DEPENDENCY
     if isinstance(error, FileConversionException):
         return _classify_attempts(error)
-    if isinstance(error, _NETWORK_ERRORS):
+    if _is_network_error(error):
         return FailureReason.NETWORK
     if isinstance(error, FileNotFoundError):
         return FailureReason.FILE_NOT_FOUND
