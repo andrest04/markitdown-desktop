@@ -45,8 +45,10 @@ def _url_item(url: str) -> QueueItem:
 
 class RealConversionFailureTests(unittest.TestCase):
     def setUp(self):
+        catcher = warnings.catch_warnings()
+        catcher.__enter__()
+        self.addCleanup(catcher.__exit__, None, None, None)
         warnings.simplefilter("ignore")
-        self.addCleanup(warnings.resetwarnings)
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.folder = Path(tmp.name)
@@ -82,8 +84,16 @@ class RealConversionFailureTests(unittest.TestCase):
                 self.assertIs(self.reason_for(self.write(name, data)), FailureReason.UNREADABLE_FILE)
 
     def test_permission_denied(self):
+        # A patch, because chmod cannot deny the owner on Windows or root elsewhere.
         item = self.write("locked.txt", b"text")
-        with mock.patch("builtins.open", side_effect=PermissionError(errno.EACCES, "Permission denied")):
+        real_open = open
+
+        def deny_this_file(path, *args, **kwargs):
+            if path == item.source:
+                raise PermissionError(errno.EACCES, "Permission denied", path)
+            return real_open(path, *args, **kwargs)
+
+        with mock.patch("builtins.open", deny_this_file):
             self.assertIs(self.reason_for(item), FailureReason.PERMISSION_DENIED)
 
     def test_a_missing_optional_dependency(self):
