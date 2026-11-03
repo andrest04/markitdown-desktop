@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The preview caps prose at a readable line length, with new typography for
   lists, quotes, tables, and code, and a thinner scrollbar.
 - Redesigned the landing page, now in English and Spanish.
+- The README and landing page show screenshots of the current interface and describe
+  its flows, instead of the old demo.
 
 ### Fixed
 

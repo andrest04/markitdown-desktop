@@ -19,71 +19,75 @@ manual "export" step required.
 > maintained, or endorsed by Microsoft. See [Credits & License](#credits--license)
 > below.
 
-![MarkItDown Desktop walkthrough: add a file, it converts, the rendered markdown preview appears](assets/demo.gif)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/app-dark-en.png">
+  <img alt="MarkItDown Desktop with five files in its list: three saved to Downloads, one that failed with the reason no text found and a Retry button, one converting. The selected file's Markdown is rendered beside the list." src="docs/screenshots/app-light-en.png">
+</picture>
 
 **[🌐 Website](https://andrest04.github.io/markitdown-desktop/)** ·
 **[⬇️ Download for Windows (.exe)](https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop.exe)** ·
 **[Latest release](https://github.com/andrest04/markitdown-desktop/releases/latest)**
 
+## How it works
+
+1. **Add something.** Drop files or folders anywhere in the window, use
+   **Add files** or **Add folder**, or paste a webpage or YouTube link and
+   press **Convert**.
+2. **It converts right away**, in the background. One failed file never stops
+   the rest.
+3. **The `.md` is already in Downloads**, named after the original. An existing
+   file is never overwritten: the new one becomes `document (1).md`.
+
+Select a file to read the result, then **Copy Markdown**, **Open file**, or
+**Show in folder**.
+
 ## Features
 
-- Drag-and-drop of files/folders (recursive) onto the window, explicit
-  Browse / Add folder buttons, and a URL field (webpage or YouTube link)
-  — any of these starts conversion immediately, no separate "Convert"
-  click needed. You can also drop files onto the queue or preview once
-  items exist.
-- **Auto-save to Downloads**: as soon as an item finishes converting, the
-  resulting `.md` file is written straight to `Path.home() / "Downloads"`
-  (resolved generically, so it works on any account) using the original
-  file's name. If a same-named file already exists there, a numeric suffix
-  is appended (`document (1).md`, `document (2).md`, ...) so nothing gets
-  overwritten. The queue row shows "Saved to Downloads"; a banner offers
-  "Show in folder", and double-clicking a done row opens the containing
-  folder.
-- Queue as an activity list with per-item status (Pending / Converting /
-  Saved / Error), multi-select, remove, and clear. The drop canvas is the
-  whole window while empty and shrinks to a slim bar once items exist, so
-  the list and preview can take over. Retry is in the row context menu
-  and Edit menu, out of the primary path.
-- Runs on a background `QThreadPool` so the UI never freezes; per-item
-  errors are caught and shown without stopping the batch. A progress bar
-  only appears while a batch is actively converting, and disappears when
-  idle.
-- Rendered (HTML via the `markdown` package) and Raw (editable) preview
-  tabs. "Save a copy as..." / "Export all to..." buttons remain available
-  as an optional way to also save elsewhere — auto-save to Downloads always
-  happens regardless.
-- Advanced/optional settings (markitdown's `enable_plugins`,
-  `keep_data_uris`, Azure Document Intelligence `docintel_endpoint`, Azure
-  Content Understanding `cu_endpoint`/`cu_analyzer_id`, and per-item
-  extension/mimetype/charset `StreamInfo` hints) live in a secondary
-  **Edit > Advanced Settings...** dialog, out of the way of the main
-  drop-and-done flow.
-- Light/dark Inkbench themes (Fusion + QSS), with "follow system" or
-  manual toggle, persisted via `QSettings` (window geometry, last export
-  folder, theme choice).
-- **English/Spanish (neutral) UI** via a lightweight, dependency-free
-  translation layer (`app/i18n.py` — no Qt Linguist `.ts`/`.qm` build step).
-  Defaults to your system locale (Spanish for `es_*`, English otherwise)
-  and can be switched anytime with the EN / ES control next to the menu
-  bar; the choice is remembered via `QSettings` and switching updates the
-  whole UI, including already-queued rows, immediately — no restart needed.
+- **A list that answers first.** The line above the list says what is ready and
+  what needs you, for example "1 failed, 3 ready". Each row has its own status
+  mark, and problem rows give their reason in words and a **Retry** button.
+- **Reasons you can act on.** Failures read "unsupported format", "disk full",
+  "no text found" and so on, in your language, with the library's own text in
+  the detail pane and the row tooltip. A document with no extractable text fails
+  with that reason instead of saving an empty `.md`. An image with no EXIF data
+  usually needs OCR, which needs Azure Document Intelligence (below).
+- **Preview and edit.** The **Preview** tab renders the Markdown at a readable
+  line length; the **Markdown** tab holds the raw text, which you can edit
+  before copying it or saving a copy.
+- **Also save elsewhere.** **More** has **Save a copy...** and **Export all...**.
+  These are optional: the save to Downloads has already happened.
+- **Light and dark themes**, ink on paper with one highlighter. Follow the
+  system or choose in **View**. Status never relies on color alone.
+- **English and Spanish.** The language follows your system (Spanish for `es_*`,
+  English otherwise), and the EN and ES buttons switch everything live, rows
+  included, without a restart.
+- **Advanced settings, out of the way.** **Edit > Advanced settings...** holds
+  markitdown's plugins, `keep_data_uris`, Azure Document Intelligence, Azure
+  Content Understanding, and per-file extension, MIME type and charset hints.
+
+Your window size, theme, language, and last export folder are remembered.
+
+### Keyboard
+
+| Key | Does |
+| --- | --- |
+| `Ctrl+O` | Add files |
+| `Ctrl+Shift+C` | Copy Markdown |
+| `Enter`, on a problem row | Retry it |
+| `Delete`, in the list | Remove the selected rows |
+| `Ctrl+Q` | Exit |
 
 ## Supported input formats
 
 Anything `markitdown` supports: PDF, Word, Excel, PowerPoint, images (EXIF
 + optional OCR), audio (transcription), HTML, CSV, JSON, XML, ZIP
-archives, EPub, plain text, and YouTube / general web URLs. See the
+archives, EPub, plain text, and YouTube or other web links. See the
 [markitdown README](https://github.com/microsoft/markitdown) for the full,
 up-to-date list.
 
 ## Download a pre-built binary (no Python required)
 
-- **Windows — Installer (recommended: Start Menu + uninstaller)**:
-  [download `markitdown-desktop-setup.exe`](https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop-setup.exe)
-  and run it — installs per-user (no admin rights needed), adds a Start
-  Menu shortcut, and registers a proper uninstaller.
-- **Windows — Portable .exe (no install, just run it)**:
+- **Windows, portable .exe (no install, just run it)**:
   [download `markitdown-desktop.exe`](https://github.com/andrest04/markitdown-desktop/releases/latest/download/markitdown-desktop.exe)
   directly — a single file, no install, no unzip.
 - **macOS/Linux**: each [release](https://github.com/andrest04/markitdown-desktop/releases/latest)
@@ -93,6 +97,11 @@ up-to-date list.
 A zipped Windows build (`markitdown-desktop-windows.zip`) is also available
 on the [releases page](https://github.com/andrest04/markitdown-desktop/releases/latest)
 if you prefer that format.
+
+The latest release, v1.3.0, predates the interface shown above, which is on
+`main` and arrives with the next release. So does a Windows installer
+(`markitdown-desktop-setup.exe`) that installs per-user, with no admin rights,
+and adds a Start Menu shortcut and an uninstaller.
 
 ## Requirements (running from source)
 
@@ -118,18 +127,38 @@ system exposes it.
 - **Windows**: double-click `run.bat`, or run `python main.py`.
 - **macOS/Linux**: run `./run.sh`, or `python3 main.py`.
 
-The "open containing folder" action (double-click a finished row) uses
-`explorer` on Windows, `open -R` on macOS, and `xdg-open` on Linux.
+**Show in folder** uses Explorer on Windows, `open -R` on macOS, and `xdg-open`
+on Linux. Double-clicking a saved row opens the file.
+
+## Tests
+
+```bash
+QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests
+```
+
+The suite uses only the standard library's `unittest`, a temporary home folder,
+and fake settings, so it never touches your Downloads or your saved preferences.
+CI runs it on Windows, macOS, and Linux, along with `ruff check .`, a
+byte-compile, and a headless build of the main window.
 
 ## Project structure
 
 ```
-main.py                    entry point
-app/ui/main_window.py      main window, drop zone, advanced settings dialog
-app/ui/theme.py            light/dark QSS stylesheets
-app/core/converter.py      MarkItDown wrapper, background worker, auto-save logic
-app/core/queue_model.py    queue table data model
-app/i18n.py                English/Spanish translation layer
+main.py                       entry point
+app/core/converter.py         MarkItDown wrapper, background worker, auto-save
+app/core/conversion_queue.py  runs items through convert, then save
+app/core/queue_model.py       queue items, their states, the table model
+app/ui/main_window.py         main window, menus, list and detail panes
+app/ui/drop_zone.py           empty-window instruction, add buttons, link field
+app/ui/queue_delegate.py      paints the queue rows
+app/ui/queue_text.py          the words for the queue summary and detail header
+app/ui/status_mark.py         one mark per status
+app/ui/brand_mark.py          the app's mark
+app/ui/advanced_settings_dialog.py, about_dialog.py
+app/ui/theme.py               palette and stylesheets, light and dark
+app/i18n.py                   English and Spanish translations
+tests/                        unittest suite
+docs/                         landing page and screenshots
 ```
 
 ## Contributing
