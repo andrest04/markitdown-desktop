@@ -1,4 +1,4 @@
-"""The list pane's painted parts: queue rows, state marks, the product mark.
+"""Queue rows, and the text that describes them and the queue as a whole.
 
 A row is two lines of text beside a state mark, with nothing around it. The
 selected row is a quiet fill with a highlighter stroke across the file name.
@@ -11,15 +11,13 @@ import os
 from collections import Counter
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEvent, QLocale, QPointF, QRect, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
+from PySide6.QtCore import QEvent, QLocale, QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import (
-    QApplication,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QToolTip,
-    QWidget,
 )
 
 from app.core.queue_model import (
@@ -33,11 +31,10 @@ from app.core.queue_model import (
 )
 from app.i18n import LANG_ES, tr
 from app.i18n import manager as i18n_manager
-from app.ui.theme import Tokens, tokens_for
+from app.ui.status_mark import GLYPH_SIZE, paint_status_glyph
+from app.ui.theme import Tokens, current_tokens
 
 ROW_HEIGHT = 52
-GLYPH_SIZE = 16
-BRAND_MARK_SIZE = 20
 
 _PADDING = 14
 _GLYPH_GAP = 10
@@ -70,11 +67,6 @@ _STATE_STYLES = {
 
 def status_style(state: DisplayState) -> StatusStyle:
     return _STATE_STYLES[state]
-
-
-def current_tokens() -> Tokens:
-    app = QApplication.instance()
-    return tokens_for((app.property("themeName") if app is not None else None) or "light")
 
 
 def row_tooltip(item: QueueItem) -> str:
@@ -187,128 +179,6 @@ def queue_summary(items: list[QueueItem]) -> QueueSummary | None:
         "working" if converting or waiting else "converted",
         False,
     )
-
-
-def _check_path(box: QRectF) -> QPainterPath:
-    path = QPainterPath()
-    path.moveTo(box.left() + box.width() * 0.08, box.top() + box.height() * 0.54)
-    path.lineTo(box.left() + box.width() * 0.38, box.top() + box.height() * 0.84)
-    path.lineTo(box.left() + box.width() * 0.92, box.top() + box.height() * 0.18)
-    return path
-
-
-def paint_status_glyph(painter: QPainter, rect: QRect, glyph: str, color: str, knockout: str, angle: int = 0) -> None:
-    """Draw a state mark. Each one has its own silhouette and weight, so they
-    read apart in greyscale: dots, an arc, half a disc, a bare check, an open
-    triangle, and a solid square that is the heaviest because it needs you.
-    `knockout` is the row fill, for the cross cut into the square.
-    """
-    box = QRectF(rect).adjusted(1, 1, -1, -1)
-    unit = box.width() / 14
-    round_pen = (Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
-    solid = QColor(color)
-    painter.save()
-    painter.setBrush(Qt.BrushStyle.NoBrush)
-    if glyph == "waiting":
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(solid)
-        radius = 1.25 * unit
-        for x in (0.14, 0.5, 0.86):
-            painter.drawEllipse(QPointF(box.left() + box.width() * x, box.center().y()), radius, radius)
-    elif glyph == "working":
-        painter.setPen(QPen(solid, 2 * unit, *round_pen))
-        painter.drawArc(box.adjusted(unit, unit, -unit, -unit), -angle * 16, 270 * 16)
-    elif glyph == "converted":
-        painter.setPen(QPen(solid, 1.5 * unit, *round_pen))
-        inner = box.adjusted(unit, unit, -unit, -unit)
-        painter.drawEllipse(inner)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(solid)
-        painter.drawPie(inner, 90 * 16, 180 * 16)
-    elif glyph == "saved":
-        painter.setPen(QPen(solid, 2.2 * unit, *round_pen))
-        painter.drawPath(_check_path(box))
-    elif glyph == "failed":
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(solid)
-        painter.drawRoundedRect(box, 2 * unit, 2 * unit)
-        painter.setPen(QPen(QColor(knockout), 2 * unit, *round_pen))
-        inset = box.width() * 0.3
-        inner = box.adjusted(inset, inset, -inset, -inset)
-        painter.drawLine(inner.topLeft(), inner.bottomRight())
-        painter.drawLine(inner.topRight(), inner.bottomLeft())
-    elif glyph == "warning":
-        pen = QPen(solid, 1.5 * unit, *round_pen)
-        painter.setPen(pen)
-        triangle = QPainterPath()
-        triangle.moveTo(box.center().x(), box.top() + unit)
-        triangle.lineTo(box.right() - 0.5 * unit, box.bottom() - unit)
-        triangle.lineTo(box.left() + 0.5 * unit, box.bottom() - unit)
-        triangle.closeSubpath()
-        painter.drawPath(triangle)
-        x = box.center().x()
-        painter.drawLine(QPointF(x, box.top() + box.height() * 0.40), QPointF(x, box.top() + box.height() * 0.62))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(solid)
-        painter.drawEllipse(QPointF(x, box.top() + box.height() * 0.76), 0.85 * unit, 0.85 * unit)
-    painter.restore()
-
-
-def paint_brand_mark(painter: QPainter, rect: QRect, t: Tokens) -> None:
-    """The product in one picture: a page of text with one line highlighted."""
-    box = QRectF(rect)
-    unit = box.width() / 20
-    left = box.left() + 4 * unit
-    painter.save()
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.setPen(Qt.PenStyle.NoPen)
-    painter.setBrush(QColor(t.ink))
-    painter.drawRoundedRect(box, 4 * unit, 4 * unit)
-    # The stroke runs edge to edge and is thicker than the lines, the way a marker is.
-    painter.setBrush(QColor(t.mark))
-    painter.drawRect(QRectF(box.left(), box.top() + 7.5 * unit, box.width(), 5 * unit))
-    painter.setBrush(QColor(t.primary_fg))
-    painter.drawRect(QRectF(left, box.top() + 4 * unit, 12 * unit, 1.5 * unit))
-    painter.drawRect(QRectF(left, box.top() + 14.5 * unit, 8 * unit, 1.5 * unit))
-    painter.restore()
-
-
-class BrandMark(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setFixedSize(BRAND_MARK_SIZE, BRAND_MARK_SIZE)
-
-    def paintEvent(self, event) -> None:
-        painter = QPainter(self)
-        paint_brand_mark(painter, self.rect(), current_tokens())
-
-
-class StatusMark(QWidget):
-    """A state mark outside the list, so a summary speaks the rows' language."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setFixedSize(GLYPH_SIZE, GLYPH_SIZE)
-        self._glyph = "waiting"
-        self._attention = False
-        self._angle = 0
-
-    def set_glyph(self, glyph: str, attention: bool) -> None:
-        self._glyph = glyph
-        self._attention = attention
-        self.update()
-
-    def set_angle(self, angle: int) -> None:
-        self._angle = angle
-        if self._glyph == "working":
-            self.update()
-
-    def paintEvent(self, event) -> None:
-        t = current_tokens()
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        color = t.danger if self._attention else t.ink
-        paint_status_glyph(painter, self.rect(), self._glyph, color, t.desk, self._angle)
 
 
 class QueueItemDelegate(QStyledItemDelegate):

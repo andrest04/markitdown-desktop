@@ -19,7 +19,8 @@ from qt_support import WindowTestCase, process_events, pump_until
 from app.core.queue_model import DisplayState, ItemStatus, QueueItem, SourceKind
 from app.i18n import LANG_EN, LANG_ES, tr
 from app.i18n import manager as i18n_manager
-from app.ui.queue_delegate import ROW_HEIGHT, paint_status_glyph, status_style
+from app.ui.queue_delegate import ROW_HEIGHT, status_style
+from app.ui.status_mark import paint_status_glyph
 from app.ui.theme import tokens_for
 
 

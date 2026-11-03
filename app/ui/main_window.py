@@ -63,15 +63,15 @@ from app.i18n import LANG_EN, LANG_ES, tr
 from app.i18n import manager as i18n_manager
 from app.ui.about_dialog import AboutDialog
 from app.ui.advanced_settings_dialog import AdvancedSettingsDialog
+from app.ui.brand_mark import BrandMark
 from app.ui.drop_zone import EMPTY_GUTTER, DropZone, center_column, empty_column_left
 from app.ui.queue_delegate import (
     ROW_HEIGHT,
-    BrandMark,
     QueueItemDelegate,
-    StatusMark,
     detail_status,
     queue_summary,
 )
+from app.ui.status_mark import StatusMark
 from app.ui.theme import (
     PREVIEW_MARGIN,
     READING_WIDTH,

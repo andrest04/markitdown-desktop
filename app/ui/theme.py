@@ -94,6 +94,11 @@ def tokens_for(theme_name: str) -> Tokens:
     return DARK if theme_name == "dark" else LIGHT
 
 
+def current_tokens() -> Tokens:
+    app = QApplication.instance()
+    return tokens_for((app.property("themeName") if app is not None else None) or "light")
+
+
 def set_tier(button: QPushButton, tier: str) -> None:
     """Set a button's emphasis: "primary", "quiet" or "ghost"; restyles it live."""
     if button.property("tier") == tier:
