@@ -214,6 +214,9 @@ Qt's `styleHints().colorScheme()`: the app palette cannot answer, because
   Linux, `tests/shutdown_refcount_probe.py` runs after the suite, even when it
   fails, and cannot change the job's result: a temporary diagnostic for the
   suite's abort at interpreter exit (`bool_dealloc`).
+- `assets/icon.*` — the app icon, drawn by `assets/make_icons.py` (needs
+  Pillow, which the app does not); the window, both PyInstaller builds and
+  `installer.iss` use it.
 - `release.yml` — on any `vX.Y.Z` tag push: builds a PyInstaller
   `--onedir --windowed` bundle per OS (`--collect-all markitdown
   --collect-all magika`, needed because both do dynamic/plugin-style

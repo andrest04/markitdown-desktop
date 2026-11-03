@@ -8,7 +8,7 @@ import sys
 import webbrowser
 
 import markdown as markdown_lib
-from PySide6.QtCore import QEvent, QSettings, Qt, QTimer, QUrl
+from PySide6.QtCore import QEvent, QRect, QSettings, Qt, QTimer, QUrl
 from PySide6.QtGui import (
     QAction,
     QDesktopServices,
@@ -100,6 +100,10 @@ _LIST_WIDTH = 340
 _PANE_MARGIN = 24
 _PROGRESS_HEIGHT = 2
 _ERROR_DETAIL_CHARS = 1200
+# The empty screen is one short column; the list and preview need real room.
+COMPACT_WINDOW_SIZE = (760, 500)
+WORKING_WINDOW_SIZE = (1180, 780)
+
 _BRAND_MARGINS_EMPTY = (EMPTY_GUTTER, 18, EMPTY_GUTTER, 0)
 # Centers the mark on the state marks below and starts the name on their text edge.
 _BRAND_MARGINS_FILLED = (12, 14, 14, 10)
@@ -164,10 +168,11 @@ class MainWindow(QMainWindow):
         i18n_manager.language_changed.connect(self._on_language_changed)
 
         self.setWindowTitle(tr("window.title"))
-        self.resize(1180, 780)
+        self.resize(*COMPACT_WINDOW_SIZE)
         # Height only: an explicit width would override the layout's minimum
         # and clip the action row in longer languages or larger fonts.
-        self.setMinimumHeight(560)
+        self.setMinimumHeight(COMPACT_WINDOW_SIZE[1])
+        self._showing_empty = True
 
         self._preview_item: QueueItem | None = None
         self._preview_full_width = False
@@ -445,6 +450,9 @@ class MainWindow(QMainWindow):
 
     def _update_drop_zone_prominence(self, *args) -> None:
         empty = len(self.model.items()) == 0
+        leaving_work = empty and not self._showing_empty
+        if leaving_work:
+            self._remember_working_size()
         self.drop_zone.set_prominent(empty)
         self._brand_row.setContentsMargins(*(_BRAND_MARGINS_EMPTY if empty else _BRAND_MARGINS_FILLED))
         center_column(self._brand_row, self._brand_column, empty, self.drop_zone.column_width())
@@ -456,6 +464,9 @@ class MainWindow(QMainWindow):
         self.preview_panel.setVisible(not empty)
         self.status_bar.setVisible(not empty)
         self.clear_action.setEnabled(not empty)
+        if empty != self._showing_empty:
+            self._showing_empty = empty
+            self._apply_window_size(empty)
         if empty:
             self._update_preview_header(None)
             self._show_preview_empty("", "")
@@ -682,6 +693,10 @@ class MainWindow(QMainWindow):
         geometry = self.settings.value("window/geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
+        # The app always opens on the empty screen, whatever size it closed at;
+        # only the position carries over.
+        self.setWindowState(Qt.WindowState.WindowNoState)
+        self._apply_window_size(empty=True)
         theme_pref = self.settings.value("theme/preference", "system")
         self._theme_preference = theme_pref
         self._sync_theme_menu_checks()
@@ -721,8 +736,38 @@ class MainWindow(QMainWindow):
         self._render_markdown(self.raw_view.toPlainText())
         self.table_view.viewport().update()
 
+    def _available_area(self) -> QRect:
+        return self.screen().availableGeometry()
+
+    def _remember_working_size(self) -> None:
+        if not (self.isMaximized() or self.isFullScreen()):
+            self.settings.setValue("window/working_width", self.width())
+            self.settings.setValue("window/working_height", self.height())
+
+    def _apply_window_size(self, empty: bool) -> None:
+        """Small for the empty screen, the chosen working size for the list,
+        always fully on screen. A maximized window stays as the person set it."""
+        if self.isMaximized() or self.isFullScreen():
+            return
+        if empty:
+            width, height = COMPACT_WINDOW_SIZE
+        else:
+            width = int(self.settings.value("window/working_width", WORKING_WINDOW_SIZE[0]))
+            height = int(self.settings.value("window/working_height", WORKING_WINDOW_SIZE[1]))
+        area = self._available_area()
+        frame_width = self.frameGeometry().width() - self.width()
+        frame_height = self.frameGeometry().height() - self.height()
+        width = min(width, area.width() - frame_width)
+        height = min(height, area.height() - frame_height)
+        self.resize(width, height)
+        left = max(area.left(), min(self.x(), area.right() + 1 - width - frame_width))
+        top = max(area.top(), min(self.y(), area.bottom() + 1 - height - frame_height))
+        self.move(left, top)
+
     def closeEvent(self, event) -> None:
         self.settings.setValue("window/geometry", self.saveGeometry())
+        if not self._showing_empty:
+            self._remember_working_size()
         super().closeEvent(event)
 
     def _on_language_changed(self, language: str) -> None:

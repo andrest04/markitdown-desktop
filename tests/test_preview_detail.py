@@ -186,8 +186,12 @@ class WindowDetailTests(WindowTestCase):
         self.assertFalse(self.window.preview_error_detail.isVisible())
 
     def test_a_wide_table_gets_the_pane_and_prose_keeps_the_measure(self):
+        from PySide6.QtCore import QRect
+
         from app.ui.theme import READING_WIDTH
 
+        # The offscreen screen is 800 wide, which would cap the pane under the measure.
+        self.window._available_area = lambda: QRect(0, 0, 1920, 1040)
         view = self.window.rendered_view
         self.select(make_item(saved="/x/a.md", result="words"))
         self.assertEqual(view.lineWrapColumnOrWidth(), READING_WIDTH)

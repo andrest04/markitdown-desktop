@@ -48,6 +48,8 @@ jobs:
         run: >
           pyinstaller --noconfirm --onedir --windowed
           --name markitdown-desktop
+          --icon ${{ runner.os == 'macOS' && 'assets/icon.icns' || 'assets/icon.ico' }}
+          --add-data assets/icon.png:assets
           --collect-all markitdown
           --collect-all magika
           main.py
@@ -58,6 +60,8 @@ jobs:
           pyinstaller --noconfirm --onefile --windowed
           --name markitdown-desktop
           --distpath dist-onefile
+          --icon ${{ runner.os == 'macOS' && 'assets/icon.icns' || 'assets/icon.ico' }}
+          --add-data assets/icon.png:assets
           --collect-all markitdown
           --collect-all magika
           main.py
