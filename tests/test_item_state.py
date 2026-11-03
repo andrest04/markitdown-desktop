@@ -4,7 +4,6 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from PySide6.QtCore import Qt
 from qt_support import WindowTestCase, pump_until, settle
 
 from app.core.queue_model import COLUMN_STATUS, ItemStatus, QueueItem, SourceKind
@@ -19,52 +18,52 @@ SAVED_PATH = "/somewhere/saved.md"
 MATRIX = [
     {
         "item": (ItemStatus.PENDING, "", ""),
-        "text": "status.pending", "tooltip": None,
+        "text": "status.pending",
         "color": "muted",
         "header": "preview.pending", "kind": "pending", "open": False, "retry": False,
     },
     {
         "item": (ItemStatus.CONVERTING, "", ""),
-        "text": "status.converting", "tooltip": None,
+        "text": "status.converting",
         "color": "muted",
         "header": "preview.converting", "kind": "converting", "open": False, "retry": False,
     },
     {
         # A retry of an item that was saved earlier.
         "item": (ItemStatus.CONVERTING, SAVED_PATH, ""),
-        "text": "status.converting", "tooltip": None,
+        "text": "status.converting",
         "color": "muted",
         "header": "preview.converting", "kind": "converting", "open": False, "retry": False,
     },
     {
         "item": (ItemStatus.DONE, SAVED_PATH, ""),
-        "text": "status.done_saved", "tooltip": tr("tooltip.saved_to", path=SAVED_PATH),
+        "text": "status.done_saved",
         "color": "muted",
         "header": None, "header_text": tr("status.saved_as", name="saved.md"), "kind": "saved", "open": True, "retry": False,
     },
     {
         "item": (ItemStatus.DONE, "", "disk full"),
-        "text": "status.done_save_failed", "tooltip": tr("tooltip.save_failed", error="disk full"),
+        "text": "status.done_save_failed",
         "color": "danger",
-        "header": None, "header_text": tr("status.save_failed_detail", error="disk full"), "kind": "error", "open": False, "retry": True,
+        "header": None, "header_text": tr("status.save_failed_detail", error=tr("error.save_generic")), "kind": "error", "open": False, "retry": True,
     },
     {
         # Transient: converted, auto-save has not reported yet.
         "item": (ItemStatus.DONE, "", ""),
-        "text": "status.done", "tooltip": None,
+        "text": "status.done",
         "color": "muted",
         "header": "status.done", "kind": "pending", "open": False, "retry": False,
     },
     {
         "item": (ItemStatus.ERROR, "", ""),
-        "text": "status.error", "tooltip": "boom",
+        "text": "status.error",
         "color": "danger",
         "header": None, "kind": "error", "open": False, "retry": True,
     },
     {
         # A failed retry: the earlier file still exists, but the item shows failed.
         "item": (ItemStatus.ERROR, SAVED_PATH, ""),
-        "text": "status.error", "tooltip": "boom",
+        "text": "status.error",
         "color": "danger",
         "header": None, "kind": "error", "open": False, "retry": True,
     },
@@ -86,17 +85,13 @@ def make_item(status, saved_path, save_error) -> QueueItem:
 class ConsumerMatrixTests(WindowTestCase):
     """Characterization: the model, delegate and preview header for every state."""
 
-    def test_model_status_text_and_tooltip(self):
+    def test_model_status_text(self):
         for case in MATRIX:
             with self.subTest(item=case["item"]):
                 self.window.model.clear()
                 self.window.model.add_item(make_item(*case["item"]))
                 index = self.window.model.index(0, COLUMN_STATUS)
                 self.assertEqual(self.window.model.data(index), tr(case["text"]))
-                self.assertEqual(
-                    self.window.model.data(index, Qt.ItemDataRole.ToolTipRole),
-                    case["tooltip"],
-                )
 
     def test_delegate_parts(self):
         delegate = QueueItemDelegate()
@@ -113,7 +108,7 @@ class ConsumerMatrixTests(WindowTestCase):
         for case in MATRIX:
             with self.subTest(item=case["item"]):
                 self.window._update_preview_header(make_item(*case["item"]))
-                expected = case.get("header_text", "boom") if case["header"] is None else tr(case["header"])
+                expected = case.get("header_text", "Conversion error") if case["header"] is None else tr(case["header"])
                 self.assertEqual(self.window.preview_header_status.text(), expected)
                 self.assertEqual(self.window.preview_header_status.property("kind"), case["kind"])
                 self.assertEqual(not self.window.open_file_btn.isHidden(), case["open"])
@@ -159,6 +154,66 @@ class FailedRetryTests(WindowTestCase):
         with mock.patch.object(self.window, "_open_file") as open_file:
             self.window._on_row_double_clicked(self.window.model.index(0, 0))
         open_file.assert_called_once_with(item.saved_path)
+
+
+class StaleResultTests(WindowTestCase):
+    """An item that is not currently converted has nothing current to save."""
+
+    def _item_saved_then_failed_retry(self):
+        self.add_sources("a.txt")
+        self.converter.release("a.txt")
+        self.assertTrue(pump_until(lambda: self.item_named("a.txt").status == ItemStatus.DONE))
+        settle()
+        item = self.item_named("a.txt")
+        self.converter.failures["a.txt"] = "boom"
+        self.window.table_view.selectRow(0)
+        self.window.action_convert_selected()
+        self.converter.release("a.txt")
+        self.assertTrue(pump_until(lambda: item.status == ItemStatus.ERROR))
+        settle()
+        return item
+
+    def test_saving_a_failed_item_refuses_and_writes_nothing(self):
+        item = self._item_saved_then_failed_retry()
+        self.assertIsNotNone(item.markdown_result, "the stale text is what must not be written")
+        target = self.tmp / "copy.md"
+        with (
+            mock.patch("app.ui.main_window.QFileDialog.getSaveFileName", return_value=(str(target), "")) as dialog,
+            mock.patch("app.ui.main_window.QMessageBox.information") as information,
+        ):
+            self.window.action_save_current()
+        dialog.assert_not_called()
+        information.assert_called_once()
+        self.assertEqual(information.call_args.args[1], tr("msgbox.nothing_to_save.title"))
+        self.assertFalse(target.exists())
+
+    def test_the_action_is_off_in_every_menu_that_holds_it(self):
+        self._item_saved_then_failed_retry()
+        self.assertFalse(self.window.save_copy_action.isEnabled())
+        self.assertIn(self.window.save_copy_action, self.window.file_menu.actions())
+        self.assertIn(self.window.save_copy_action, self.window.more_menu.actions())
+
+    def test_saving_a_retry_in_progress_refuses_too(self):
+        item = self._item_saved_then_failed_retry()
+        del self.converter.failures["a.txt"]
+        self.window.action_convert_selected()
+        self.assertTrue(pump_until(lambda: item.status == ItemStatus.CONVERTING))
+        self.assertFalse(self.window.save_copy_action.isEnabled())
+        with (
+            mock.patch("app.ui.main_window.QFileDialog.getSaveFileName") as dialog,
+            mock.patch("app.ui.main_window.QMessageBox.information"),
+        ):
+            self.window.action_save_current()
+        dialog.assert_not_called()
+
+    def test_saving_works_again_after_a_successful_retry(self):
+        item = self._item_saved_then_failed_retry()
+        del self.converter.failures["a.txt"]
+        self.window.action_convert_selected()
+        self.converter.release("a.txt")
+        self.assertTrue(pump_until(lambda: item.status == ItemStatus.DONE))
+        settle()
+        self.assertTrue(self.window.save_copy_action.isEnabled())
 
 
 class SaveFailureTests(WindowTestCase):

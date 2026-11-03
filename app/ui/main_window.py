@@ -1,6 +1,7 @@
 """Main application window for MarkItDown Desktop."""
 from __future__ import annotations
 
+import ntpath
 import os
 import subprocess
 import sys
@@ -42,6 +43,7 @@ from app.core.conversion_queue import ConversionQueue
 from app.core.converter import (
     ConversionOptions,
     classify_paths,
+    classify_save_error,
     default_basename,
     export_markdown,
     get_downloads_dir,
@@ -50,26 +52,27 @@ from app.core.converter import (
 from app.core.queue_model import (
     COLUMN_STATUS,
     COLUMN_TYPE,
+    RETRY_STATES,
     DisplayState,
+    FailureReason,
     ItemStatus,
     QueueItem,
     QueueTableModel,
+    failure_reason_text,
 )
 from app.i18n import LANG_EN, LANG_ES, tr
 from app.i18n import manager as i18n_manager
 from app.ui.about_dialog import AboutDialog
 from app.ui.advanced_settings_dialog import AdvancedSettingsDialog
+from app.ui.brand_mark import BrandMark
 from app.ui.drop_zone import EMPTY_GUTTER, DropZone, center_column, empty_column_left
 from app.ui.queue_delegate import (
-    RETRY_STATES,
     ROW_HEIGHT,
-    BrandMark,
     QueueItemDelegate,
-    StatusMark,
-    brief_error,
     detail_status,
     queue_summary,
 )
+from app.ui.status_mark import StatusMark
 from app.ui.theme import (
     PREVIEW_MARGIN,
     READING_WIDTH,
@@ -107,12 +110,53 @@ _BRAND_MARGINS_FILLED = (12, 14, 14, 10)
 _SUMMARY_HEIGHT = 46
 
 
-def detect_system_theme() -> str:
-    """Best-effort light/dark detection based on the current QPalette."""
+def _save_failure_text(reason: FailureReason, detail: str) -> str:
+    """For a message box, which has room for the system's words after the reason."""
+    return f"{tr(reason.value)} ({detail})"
+
+
+def reveal_command(path: str) -> str | list[str]:
+    """The command that shows `path` in the system's file manager, for `Popen`.
+
+    No shell ever sees it, so `%VAR%` and `&` in a file name stay literal. Windows
+    gets one string because `Popen` passes a string to CreateProcess unchanged,
+    and Explorer needs the `/select,"<path>"` quoting that a list would not produce.
+    The full path is there because CreateProcess looks for a bare name in the
+    current folder first.
+    """
+    if sys.platform.startswith("win"):
+        system_root = os.environ.get("SystemRoot")
+        explorer = ntpath.join(system_root, "explorer.exe") if system_root else "explorer"
+        return f'{explorer} /select,"{path}"'
+    if sys.platform == "darwin":
+        return ["open", "-R", path]
+    return ["xdg-open", os.path.dirname(path)]
+
+
+def palette_theme() -> str:
+    """Light or dark, read from the current QPalette.
+
+    Only meaningful before `apply_fusion_palette` replaces that palette with
+    the app's own, which is why the window reads it once, at launch.
+    """
     palette = QGuiApplication.palette()
     window_color = palette.color(palette.ColorRole.Window)
     luminance = 0.299 * window_color.red() + 0.587 * window_color.green() + 0.114 * window_color.blue()
     return "dark" if luminance < 128 else "light"
+
+
+def detect_system_theme(fallback: str = "light") -> str:
+    """Ask the system for light or dark; `fallback` when it has no answer."""
+    # colorScheme() arrived in Qt 6.5, and requirements.txt does not pin Qt.
+    color_scheme = getattr(QGuiApplication.styleHints(), "colorScheme", None)
+    if color_scheme is None:
+        return fallback
+    scheme = color_scheme()
+    if scheme == Qt.ColorScheme.Dark:
+        return "dark"
+    if scheme == Qt.ColorScheme.Light:
+        return "light"
+    return fallback
 
 
 class MainWindow(QMainWindow):
@@ -130,6 +174,7 @@ class MainWindow(QMainWindow):
 
         self._preview_item: QueueItem | None = None
         self._preview_full_width = False
+        self._launch_theme = palette_theme()
 
         self.conversion_options = ConversionOptions()
 
@@ -157,6 +202,7 @@ class MainWindow(QMainWindow):
         self._install_shortcuts()
         self._restore_settings()
         self._apply_theme(self._current_theme_name())
+        self._follow_system_theme_changes()
         self._update_drop_zone_prominence()
         self.centralWidget().setFocus()
 
@@ -208,6 +254,7 @@ class MainWindow(QMainWindow):
         self.drag_overlay.setVisible(False)
         self.drop_zone.drag_active_changed.connect(self._on_drag_active_changed)
         central.installEventFilter(self)
+        self.table_view.installEventFilter(self)
         self.preview_panel.installEventFilter(self)
         self.rendered_view.viewport().installEventFilter(self)
 
@@ -233,7 +280,23 @@ class MainWindow(QMainWindow):
                 self._fit_preview_title()
             elif watched is self.rendered_view.viewport():
                 self._fit_reading_width()
+        elif (
+            watched is self.table_view
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+            and self._retry_focused_row()
+        ):
+            return True
         return super().eventFilter(watched, event)
+
+    def _retry_focused_row(self) -> bool:
+        """The row's Retry, for the keyboard: Enter acts on the row with the focus ring."""
+        row = self.table_view.currentIndex().row()
+        item = self.model.item_at(row)
+        if item is None or item.display_state not in RETRY_STATES:
+            return False
+        self._start_conversion([row])
+        return True
 
     def _on_drag_active_changed(self, active: bool) -> None:
         self.drag_overlay.setGeometry(self.centralWidget().rect())
@@ -281,6 +344,8 @@ class MainWindow(QMainWindow):
         self.table_view.setMouseTracking(True)
         self.table_view.setWordWrap(False)
         self.table_view.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        # Tab moves to the next control; the arrow keys move between rows.
+        self.table_view.setTabKeyNavigation(False)
         self.table_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table_view.customContextMenuRequested.connect(self._show_queue_menu)
         self.table_view.selectionModel().selectionChanged.connect(self._on_selection_changed)
@@ -512,7 +577,8 @@ class MainWindow(QMainWindow):
         self.save_copy_action = self._make_action("menu.save_copy_as", self.action_save_current)
         self.export_all_action = self._make_action("menu.export_all_to", self.action_export_all)
         self.exit_action = self._make_action("menu.exit", self.close)
-        self.exit_action.setShortcut(QKeySequence.StandardKey.Quit)
+        # Not StandardKey.Quit: on Windows that is the literal Exit key, shown as "Exit".
+        self.exit_action.setShortcut(QKeySequence("Ctrl+Q"))
         self.file_menu.addAction(self.add_files_action)
         self.file_menu.addAction(self.add_folder_action)
         self.file_menu.addAction(self.add_url_action)
@@ -621,8 +687,17 @@ class MainWindow(QMainWindow):
 
     def _current_theme_name(self) -> str:
         if self._theme_preference == "system":
-            return detect_system_theme()
+            return detect_system_theme(self._launch_theme)
         return self._theme_preference
+
+    def _follow_system_theme_changes(self) -> None:
+        changed = getattr(QGuiApplication.styleHints(), "colorSchemeChanged", None)
+        if changed is not None:
+            changed.connect(self._on_system_color_scheme_changed)
+
+    def _on_system_color_scheme_changed(self, *args) -> None:
+        if self._theme_preference == "system":
+            self._apply_theme(self._current_theme_name())
 
     def _sync_theme_menu_checks(self) -> None:
         self.theme_system_action.setChecked(self._theme_preference == "system")
@@ -766,11 +841,15 @@ class MainWindow(QMainWindow):
     def action_remove_selected(self) -> None:
         rows = sorted({idx.row() for idx in self.table_view.selectionModel().selectedRows()})
         if rows:
+            items = [self.model.item_at(row) for row in rows]
             self.model.remove_rows(rows)
+            self.conversion_queue.discard(items)
             self._refresh_preview()
 
     def action_clear_all(self) -> None:
+        items = list(self.model.items())
         self.model.clear()
+        self.conversion_queue.discard(items)
         self.raw_view.clear()
         self.rendered_view.clear()
         self._refresh_preview()
@@ -804,13 +883,14 @@ class MainWindow(QMainWindow):
 
     def _on_item_failed(self, item: QueueItem, message: str) -> None:
         self._refresh_preview_if_selected(item)
-        self.status_bar.showMessage(tr("status.conversion_failed", message=message), 5000)
+        reason = failure_reason_text(item) or message
+        self.status_bar.showMessage(tr("status.conversion_failed", message=reason), 5000)
 
     def _on_item_saved(self, item: QueueItem, path: str) -> None:
         self.status_bar.showMessage(tr("status.saved_to", path=path), 5000)
 
     def _on_item_save_failed(self, item: QueueItem, error: str) -> None:
-        self.status_bar.showMessage(tr("status.autosave_failed", error=error), 6000)
+        self.status_bar.showMessage(tr("status.autosave_failed", error=tr(item.save_error_reason.value)), 6000)
 
     def _on_progress_changed(self, completed: int, total: int) -> None:
         self.progress_bar.setMaximum(total)
@@ -937,10 +1017,8 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _error_detail(item: QueueItem) -> str:
-        """The full message, only when it says more than the header's one line."""
+        """The library's own words, under the header's translated reason."""
         message = item.error_message.strip()
-        if message == brief_error(message):
-            return ""
         if len(message) > _ERROR_DETAIL_CHARS:
             return message[:_ERROR_DETAIL_CHARS].rstrip() + "…"
         return message
@@ -993,12 +1071,7 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(tr("status.file_missing"), 4000)
             return
         try:
-            if sys.platform.startswith("win"):
-                subprocess.Popen(f'explorer /select,"{normalized}"', shell=True)
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", "-R", normalized])
-            else:
-                subprocess.Popen(["xdg-open", os.path.dirname(normalized)])
+            subprocess.Popen(reveal_command(normalized))
         except OSError:
             pass
 
@@ -1051,7 +1124,7 @@ class MainWindow(QMainWindow):
     def action_save_current(self) -> None:
         row = self._selected_row()
         item = self.model.item_at(row)
-        if item is None or item.markdown_result is None:
+        if not self._has_result(item):
             QMessageBox.information(self, tr("msgbox.nothing_to_save.title"), tr("msgbox.nothing_to_save.text"))
             return
         default_name = default_basename(item) + ".md"
@@ -1064,7 +1137,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(
                     self,
                     tr("msgbox.save_copy_failed.title"),
-                    tr("msgbox.save_copy_failed.text", error=exc),
+                    tr("msgbox.save_copy_failed.text", error=_save_failure_text(classify_save_error(exc), str(exc))),
                 )
                 return
             self.status_bar.showMessage(tr("status.saved_copy_to", path=path), 4000)
@@ -1085,7 +1158,10 @@ class MainWindow(QMainWindow):
         if result.written:
             self.status_bar.showMessage(tr("status.exported", count=len(result.written), folder=folder), 5000)
         if result.failures:
-            details = "\n".join(f"{item.display_name}: {error}" for item, error in result.failures)
+            details = "\n".join(
+                f"{failure.item.display_name}: {_save_failure_text(failure.reason, failure.detail)}"
+                for failure in result.failures
+            )
             QMessageBox.warning(
                 self,
                 tr("msgbox.export_failed.title"),

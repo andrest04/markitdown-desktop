@@ -145,7 +145,7 @@ class ExportMarkdownTests(unittest.TestCase):
         with mock.patch("pathlib.Path.write_text", flaky_write):
             result = export_markdown([bad, good], self.folder)
 
-        self.assertEqual(result.failures, [(bad, "disk full")])
+        self.assertEqual([(f.item, f.detail) for f in result.failures], [(bad, "disk full")])
         self.assertEqual(result.written, [self.folder / "good.md"])
 
     def test_unusable_folder_is_reported(self):

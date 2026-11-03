@@ -14,15 +14,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.exe` and zipped build. Installs per-user (no admin rights required),
   adds a Start Menu shortcut, an optional desktop shortcut, and a proper
   uninstaller.
+- A line above the queue answers whether everything is ready and what needs
+  attention, for example "1 failed, 2 ready".
+- A Retry button on each row that needs one, with its reason on the row.
+  Enter on the focused row does the same.
+- Failure reasons in English and Spanish, such as "damaged or unreadable file"
+  or "disk full", that follow a live language switch. The library's own text
+  stays in the detail pane and the row tooltip.
+- The detail header names the file actually saved and its word count.
+- Screen readers get each row's name and status.
+- "Follow system theme" also follows changes made while the app is open.
+- CI runs the test suite on Windows, macOS, and Linux.
 
 ### Changed
 
-- Rebuilt the desktop UI around the drop-and-done path: full-window empty
-  canvas, activity-list queue, preview that appears only after items exist,
-  save-to-Downloads banner, and retry moved to context / Edit menus.
-- Replaced the generic blue QSS with the Inkbench token system (cool
-  uncoated-stock paper, pine accent, Fusion palette) and aligned the
-  landing page with the same palette.
+- Redesigned the desktop UI as ink on paper with one highlighter: a list and
+  detail layout with one primary action per state, a marker stroke on the file
+  you are working on, and a distinct mark for each status that reads without
+  color. Files can be dropped anywhere in the window.
+- The preview caps prose at a readable line length, with new typography for
+  lists, quotes, tables, and code, and a thinner scrollbar.
+- Redesigned the landing page, now in English and Spanish.
+
+### Fixed
+
+- Export no longer overwrites existing files, and reports the ones it could
+  not write.
+- Results land on the right row when the list changes during a conversion, and
+  progress stays correct across overlapping batches.
+- Removing a file that has not started cancels it. Removing one that is running
+  discards its result and any failure message.
+- "Save a copy" no longer writes old text from a file whose retry failed.
+- Switching from dark to "Follow system theme" no longer stays dark.
+- "Show in folder" works on file names containing `%` or `&`, without a shell.
+- File > Exit shows `Ctrl+Q` instead of the word "Exit" as its shortcut on
+  Windows.
 
 ## [1.3.0] - 2026-08-13
 

@@ -28,7 +28,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libegl1 libxkbcommon0 libgl1
+          sudo apt-get install -y libegl1 libxkbcommon0 libgl1 fonts-dejavu-core
 
       - name: Install dependencies
         run: |
@@ -47,3 +47,8 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           python -c "from app.ui.main_window import MainWindow; from PySide6.QtWidgets import QApplication; app = QApplication([]); w = MainWindow(); w.show(); print('MainWindow built OK')"
+
+      - name: Run the test suite
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest discover -s tests

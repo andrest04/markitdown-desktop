@@ -32,14 +32,22 @@ markitdown/converters/_markdownify.py).
 """
 from __future__ import annotations
 
+import errno
 import os
 import re
+import socket
+import ssl
+import threading
 import warnings
+import zlib
 from dataclasses import dataclass, field
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from pathlib import Path
+from urllib.error import URLError
 from urllib.parse import urlparse
+from xml.parsers.expat import ExpatError
+from zipfile import BadZipFile
 
 # pydub (pulled in by markitdown audio converters) warns on import when
 # ffmpeg is missing. Audio transcription is optional; surface real failures
@@ -51,10 +59,18 @@ warnings.filterwarnings(
     module=r"pydub\.utils",
 )
 
-from markitdown import MarkItDown, StreamInfo
-from PySide6.QtCore import QObject, QRunnable, Signal
+import shiboken6
+from markitdown import (
+    FileConversionException,
+    MarkItDown,
+    MissingDependencyException,
+    StreamInfo,
+    UnsupportedFormatException,
+)
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
+from requests.exceptions import RequestException
 
-from app.core.queue_model import QueueItem, SourceKind
+from app.core.queue_model import FailureReason, QueueItem, SourceKind
 
 _ILLEGAL_FILENAME_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
@@ -127,12 +143,19 @@ def auto_save_markdown(item: QueueItem, markdown_text: str, downloads_dir: Path 
     return path
 
 
+@dataclass(frozen=True)
+class ExportFailure:
+    item: QueueItem
+    reason: FailureReason
+    detail: str  # raw OS text
+
+
 @dataclass
 class ExportResult:
-    """What `export_markdown` wrote, and which items failed with which error."""
+    """What `export_markdown` wrote, and which items failed and why."""
 
     written: list[Path] = field(default_factory=list)
-    failures: list[tuple[QueueItem, str]] = field(default_factory=list)
+    failures: list[ExportFailure] = field(default_factory=list)
 
 
 def export_markdown(items: list[QueueItem], folder: str | Path) -> ExportResult:
@@ -148,7 +171,7 @@ def export_markdown(items: list[QueueItem], folder: str | Path) -> ExportResult:
             path = unique_download_path(directory, sanitize_filename(default_basename(item)))
             path.write_text(item.markdown_result or "", encoding="utf-8")
         except OSError as exc:
-            result.failures.append((item, str(exc)))
+            result.failures.append(ExportFailure(item, classify_save_error(exc), str(exc)))
         else:
             result.written.append(path)
     return result
@@ -237,6 +260,82 @@ def convert_item(item: QueueItem, options: ConversionOptions) -> str:
     return result.text_content
 
 
+# Every one of these is an OSError, or an IOError in the case of requests, so
+# they have to be checked before the file errors below.
+_NETWORK_ERRORS = (RequestException, URLError, ConnectionError, TimeoutError, socket.gaierror, ssl.SSLError)
+# These come from optional libraries, so they go by class name instead of an
+# import: speech_recognition's RequestError, and Azure's failures to reach the
+# service. Azure's HttpResponseError is left out, since the service did answer.
+_NETWORK_ERROR_NAMES = {"RequestError", "ServiceRequestError", "ServiceResponseError"}
+# What a format parser raises on contents it cannot make sense of. The names are
+# pdfminer's, xlrd's and Pillow's, optional like the ones above.
+_DAMAGED_FILE_ERRORS = (BadZipFile, zlib.error, ExpatError)
+_DAMAGED_FILE_ERROR_NAMES = {"PDFSyntaxError", "CompDocError", "XLRDError", "UnidentifiedImageError"}
+_NO_ROOM = {errno.ENOSPC, getattr(errno, "EDQUOT", errno.ENOSPC)}
+_NOT_ALLOWED = {errno.EACCES, errno.EPERM, errno.EROFS}
+
+
+def _has_class_named(error: Exception, names: set[str]) -> bool:
+    return any(cls.__name__ in names for cls in type(error).__mro__)
+
+
+def _is_network_error(error: Exception) -> bool:
+    return isinstance(error, _NETWORK_ERRORS) or _has_class_named(error, _NETWORK_ERROR_NAMES)
+
+
+def _is_damaged_file_error(error: Exception) -> bool:
+    return isinstance(error, _DAMAGED_FILE_ERRORS) or _has_class_named(error, _DAMAGED_FILE_ERROR_NAMES)
+
+
+def _classify_attempts(error: FileConversionException) -> FailureReason:
+    """A converter recognized the file and then failed on it.
+
+    markitdown wraps what each attempt raised, and the source already opened by
+    then, so a FileNotFoundError here is a helper program, such as ffmpeg for
+    audio. Telling someone their file is damaged is a claim about their file, so
+    it takes an error that says so. A bare ValueError or KeyError does not: a
+    library bug raises those as well, and the raw text stays in the detail pane.
+    """
+    errors = [attempt.exc_info[1] for attempt in error.attempts or [] if attempt.exc_info]
+    if any(isinstance(exc, (MissingDependencyException, FileNotFoundError)) for exc in errors):
+        return FailureReason.MISSING_DEPENDENCY
+    if any(_is_network_error(exc) for exc in errors):
+        return FailureReason.NETWORK
+    if any(isinstance(exc, PermissionError) for exc in errors):
+        return FailureReason.PERMISSION_DENIED
+    if any(_is_damaged_file_error(exc) for exc in errors):
+        return FailureReason.UNREADABLE_FILE
+    return FailureReason.GENERIC
+
+
+def classify_conversion_error(error: Exception) -> FailureReason:
+    """Sort what `convert_item` raised into a reason the interface can translate."""
+    if isinstance(error, UnsupportedFormatException):
+        return FailureReason.UNSUPPORTED_FORMAT
+    if isinstance(error, MissingDependencyException):
+        return FailureReason.MISSING_DEPENDENCY
+    if isinstance(error, FileConversionException):
+        return _classify_attempts(error)
+    if _is_network_error(error):
+        return FailureReason.NETWORK
+    if isinstance(error, FileNotFoundError):
+        return FailureReason.FILE_NOT_FOUND
+    if isinstance(error, PermissionError):
+        return FailureReason.PERMISSION_DENIED
+    if isinstance(error, OSError):
+        return FailureReason.UNREADABLE_FILE
+    return FailureReason.GENERIC
+
+
+def classify_save_error(error: OSError) -> FailureReason:
+    """Sort a failed write by errno. Windows error codes arrive mapped onto it."""
+    if error.errno in _NO_ROOM:
+        return FailureReason.DISK_FULL
+    if isinstance(error, PermissionError) or error.errno in _NOT_ALLOWED:
+        return FailureReason.PERMISSION_DENIED
+    return FailureReason.SAVE_GENERIC
+
+
 def iter_supported_files(folder: str):
     """Recursively yield file paths under `folder` matching SUPPORTED_EXTENSIONS."""
     for root, _dirs, files in os.walk(folder):
@@ -283,7 +382,7 @@ class WorkerSignals(QObject):
     # while a conversion runs, identity does not.
     started = Signal(object)
     finished = Signal(object, str)
-    failed = Signal(object, str)
+    failed = Signal(object, object, str)  # item, FailureReason, raw message
 
 
 class ConversionWorker(QRunnable):
@@ -299,12 +398,32 @@ class ConversionWorker(QRunnable):
         self.item = item
         self.options = options
         self.signals = WorkerSignals()
+        self._start_lock = threading.Lock()
+        self._started = False
+
+    def take_from(self, pool: QThreadPool) -> bool:
+        """Pull this worker out of `pool` if it has not started; True if it did.
+
+        A started worker deletes its C++ half on its own thread when it ends,
+        so `tryTake` may only see one that has not. The lock is what holds it
+        there: `run` cannot begin while this looks.
+
+        A taken worker is the caller's to delete, and PySide does not take that
+        on: it still pins the Python half, and the item with it, for good.
+        """
+        with self._start_lock:
+            if self._started or not pool.tryTake(self):
+                return False
+        shiboken6.delete(self)
+        return True
 
     def run(self) -> None:
+        with self._start_lock:
+            self._started = True
         self.signals.started.emit(self.item)
         try:
             markdown_text = convert_item(self.item, self.options)
         except Exception as exc:  # noqa: BLE001 - must catch everything per-item
-            self.signals.failed.emit(self.item, str(exc))
+            self.signals.failed.emit(self.item, classify_conversion_error(exc), str(exc))
         else:
             self.signals.finished.emit(self.item, markdown_text)

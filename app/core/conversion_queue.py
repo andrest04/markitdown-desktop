@@ -10,8 +10,13 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QThreadPool, Signal, Slot
 
-from app.core.converter import ConversionOptions, ConversionWorker, auto_save_markdown
-from app.core.queue_model import QueueItem, QueueTableModel
+from app.core.converter import (
+    ConversionOptions,
+    ConversionWorker,
+    auto_save_markdown,
+    classify_save_error,
+)
+from app.core.queue_model import FailureReason, QueueItem, QueueTableModel
 
 
 class ConversionQueue(QObject):
@@ -38,7 +43,7 @@ class ConversionQueue(QObject):
         self._total_count = 0
         # Dispatched but not yet finished. Status only changes once a worker
         # actually starts, so it cannot guard against double dispatch.
-        self._in_flight: set[QueueItem] = set()
+        self._in_flight: dict[QueueItem, ConversionWorker] = {}
 
     def enqueue(self, items: list[QueueItem], options: ConversionOptions) -> int:
         """Start a worker for each item not already in flight; returns how many."""
@@ -54,8 +59,8 @@ class ConversionQueue(QObject):
 
         pool = QThreadPool.globalInstance()
         for item in to_start:
-            self._in_flight.add(item)
             worker = ConversionWorker(item, options)
+            self._in_flight[item] = worker
             worker.signals.started.connect(self._on_started)
             worker.signals.finished.connect(self._on_finished)
             worker.signals.failed.connect(self._on_failed)
@@ -63,6 +68,26 @@ class ConversionQueue(QObject):
 
         self.progress_changed.emit(self._completed_count, self._total_count)
         return len(to_start)
+
+    def discard(self, items: list[QueueItem]) -> None:
+        """Forget items just removed from the model.
+
+        A worker that has not started is cancelled and leaves the total. A
+        running one cannot be interrupted, because markitdown blocks: it keeps
+        counting until it returns, and its result goes nowhere, since the item
+        no longer has a row.
+        """
+        pool = QThreadPool.globalInstance()
+        cancelled = [item for item in items if item in self._in_flight and self._in_flight[item].take_from(pool)]
+        if not cancelled:
+            return
+        for item in cancelled:
+            del self._in_flight[item]
+        self._total_count -= len(cancelled)
+        if self._in_flight:
+            self.progress_changed.emit(self._completed_count, self._total_count)
+        else:
+            self.batch_finished.emit()
 
     @Slot(object)
     def _on_started(self, item: QueueItem) -> None:
@@ -83,15 +108,17 @@ class ConversionQueue(QObject):
             self.item_finished.emit(item)
         self._advance_progress(item)
 
-    @Slot(object, str)
-    def _on_failed(self, item: QueueItem, message: str) -> None:
+    @Slot(object, object, str)
+    def _on_failed(self, item: QueueItem, reason: FailureReason, message: str) -> None:
+        # An item removed from the queue meanwhile has no failure to report.
         row = self._model.row_of(item)
         if row >= 0:
-            item.mark_failed(message)
+            item.mark_failed(message, reason)
             self._model.refresh_row(row)
         self._advance_progress(item)
-        # Last, so the failure stays visible instead of "batch complete".
-        self.item_failed.emit(item, message)
+        if row >= 0:
+            # Last, so the failure stays visible instead of "batch complete".
+            self.item_failed.emit(item, message)
 
     def _auto_save(self, item: QueueItem) -> None:
         """Write a freshly converted item straight to Downloads (the whole
@@ -100,14 +127,14 @@ class ConversionQueue(QObject):
         try:
             saved_path = auto_save_markdown(item, item.markdown_result or "", self._downloads_dir)
         except OSError as exc:
-            item.mark_save_failed(str(exc))
+            item.mark_save_failed(str(exc), classify_save_error(exc))
             self.item_save_failed.emit(item, str(exc))
         else:
             item.mark_saved(str(saved_path))
             self.item_saved.emit(item, str(saved_path))
 
     def _advance_progress(self, item: QueueItem) -> None:
-        self._in_flight.discard(item)
+        self._in_flight.pop(item, None)
         self._completed_count += 1
         self.progress_changed.emit(self._completed_count, self._total_count)
         if not self._in_flight:

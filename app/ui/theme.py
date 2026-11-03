@@ -56,7 +56,7 @@ class Tokens:
 LIGHT = Tokens(
     paper="#FFFFFF",
     desk="#EEF0F4",
-    hover="#E7E9EF",
+    hover="#E9ECF1",
     wash="#E2E5EC",
     wash_strong="#D3D8E2",
     rule="#D5D9E2",
@@ -92,6 +92,11 @@ DARK = Tokens(
 
 def tokens_for(theme_name: str) -> Tokens:
     return DARK if theme_name == "dark" else LIGHT
+
+
+def current_tokens() -> Tokens:
+    app = QApplication.instance()
+    return tokens_for((app.property("themeName") if app is not None else None) or "light")
 
 
 def set_tier(button: QPushButton, tier: str) -> None:
@@ -328,11 +333,13 @@ QStatusBar::item {{
 QScrollBar:vertical {{
     background: transparent;
     width: 8px;
-    margin: 0 1px;
+    margin: 0;
 }}
 QScrollBar::handle:vertical {{
     background: {t.edge};
     min-height: 32px;
+    margin: 0 2px;
+    border-radius: 2px;
 }}
 QScrollBar::handle:vertical:hover {{
     background: {t.muted};
@@ -345,11 +352,13 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
 QScrollBar:horizontal {{
     background: transparent;
     height: 8px;
-    margin: 1px 0;
+    margin: 0;
 }}
 QScrollBar::handle:horizontal {{
     background: {t.edge};
     min-width: 32px;
+    margin: 2px 0;
+    border-radius: 2px;
 }}
 QScrollBar::handle:horizontal:hover {{
     background: {t.muted};

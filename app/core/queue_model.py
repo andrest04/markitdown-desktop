@@ -37,6 +37,25 @@ class DisplayState(Enum):
     ERROR = "status.error"
 
 
+class FailureReason(Enum):
+    """Why a conversion or a save failed, as far as the app can tell.
+
+    Values are translation KEYS, for the same reason as ItemStatus: library text
+    cannot be translated, so `converter.py` sorts failures into these and the
+    raw text stays alongside as detail.
+    """
+
+    UNSUPPORTED_FORMAT = "error.unsupported_format"
+    MISSING_DEPENDENCY = "error.missing_dependency"
+    UNREADABLE_FILE = "error.unreadable_file"
+    FILE_NOT_FOUND = "error.file_not_found"
+    PERMISSION_DENIED = "error.permission_denied"
+    NETWORK = "error.network"
+    GENERIC = "error.generic"
+    DISK_FULL = "error.disk_full"
+    SAVE_GENERIC = "error.save_generic"
+
+
 class SourceKind(Enum):
     FILE = "File"
     URL = "URL"
@@ -70,7 +89,8 @@ class QueueItem:
     display_name: str
     detected_type: str = ""
     status: ItemStatus = ItemStatus.PENDING
-    error_message: str = ""
+    error_message: str = ""  # raw library text, for the detail pane
+    error_reason: FailureReason = FailureReason.GENERIC
     markdown_result: str | None = None
     # Per-item conversion overrides (extension/mimetype/charset hints)
     extension_override: str = ""
@@ -78,7 +98,8 @@ class QueueItem:
     charset_override: str = ""
     # Result of the automatic save-to-Downloads step (set after conversion).
     saved_path: str = ""
-    save_error: str = ""
+    save_error: str = ""  # raw OS text
+    save_error_reason: FailureReason = FailureReason.SAVE_GENERIC
 
     @classmethod
     def from_path(cls, path: str) -> QueueItem:
@@ -124,19 +145,41 @@ class QueueItem:
         self.markdown_result = markdown_text
         self.error_message = ""
 
-    def mark_failed(self, message: str) -> None:
+    def mark_failed(self, message: str, reason: FailureReason = FailureReason.GENERIC) -> None:
         """A failed retry keeps `saved_path`: the earlier file still exists."""
         self.status = ItemStatus.ERROR
         self.error_message = message
+        self.error_reason = reason
 
     def mark_saved(self, path: str) -> None:
         self.saved_path = str(path)
         self.save_error = ""
 
-    def mark_save_failed(self, error: str) -> None:
+    def mark_save_failed(self, error: str, reason: FailureReason = FailureReason.SAVE_GENERIC) -> None:
         """The conversion itself succeeded, so the status stays DONE."""
         self.saved_path = ""
         self.save_error = str(error)
+        self.save_error_reason = reason
+
+
+RETRY_STATES = {DisplayState.ERROR, DisplayState.SAVE_FAILED}
+
+
+def failure_reason_text(item: QueueItem) -> str:
+    """A failed item's reason in the current language, or "" when nothing is known."""
+    if item.error_reason == FailureReason.GENERIC and not item.error_message.strip():
+        return ""
+    return tr(item.error_reason.value)
+
+
+def row_status_text(item: QueueItem) -> str:
+    """A row's status line. A problem names its reason where it is first seen."""
+    state = item.display_state
+    if state == DisplayState.ERROR and failure_reason_text(item):
+        return tr("status.failed_reason", reason=failure_reason_text(item))
+    if state == DisplayState.SAVE_FAILED:
+        return tr("status.not_saved_reason", reason=tr(item.save_error_reason.value))
+    return tr(state.value)
 
 
 COLUMN_NAME = 0
@@ -187,20 +230,15 @@ class QueueTableModel(QAbstractTableModel):
                 return tr(item.display_state.value)
             return None
 
-        if role == Qt.ItemDataRole.ToolTipRole:
-            if col == COLUMN_STATUS:
-                state = item.display_state
-                if state == DisplayState.ERROR:
-                    return item.error_message
-                if state == DisplayState.SAVED:
-                    return tr("tooltip.saved_to", path=item.saved_path)
-                if state == DisplayState.SAVE_FAILED:
-                    return tr("tooltip.save_failed", error=item.save_error)
-                return None
-            if col == COLUMN_NAME:
-                return item.source
+        if col != COLUMN_NAME:
             return None
-
+        if role == Qt.ItemDataRole.ToolTipRole:
+            return item.source
+        # The delegate paints a row's status, which a screen reader cannot see.
+        if role == Qt.ItemDataRole.AccessibleTextRole:
+            return f"{item.display_source()}, {row_status_text(item)}"
+        if role == Qt.ItemDataRole.AccessibleDescriptionRole and item.display_state in RETRY_STATES:
+            return tr("row.retry_hint")
         return None
 
     # -- Queue management -----------------------------------------------
