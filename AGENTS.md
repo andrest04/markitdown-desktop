@@ -130,11 +130,7 @@ nothing test-related should be left in the user's actual Downloads folder.
   - `main_window.py` — `MainWindow`, the main window/queue/menu logic.
     Holds one `ConversionOptions` value, starts work through
     `ConversionQueue` and reacts to its signals to update the UI. Imports
-    the widgets below rather than defining them; the exception is the small
-    `_PreviewBrowser`, which reads no image or stylesheet that converted text
-    names, only embedded `data:` images. Preview links go through
-    `_on_preview_link_clicked` (`setOpenLinks(False)`): fragments scroll,
-    absolute `http`, `https` and `mailto` open externally, the rest do nothing.
+    the widgets below rather than defining them.
   - `drop_zone.py` — `DropZone` (no box: the empty-window instruction with
     add buttons and the link field, reduced to just the link row once items
     exist, via `set_prominent()`). No `MainWindow` reference — takes plain
@@ -152,6 +148,11 @@ nothing test-related should be left in the user's actual Downloads folder.
     focus (`WidgetShortcut`), so a file drop hands the list focus unless
     someone is typing or a dialog is open, and removing rows selects the row
     now at the first removed position. `row_tooltip()` lives here too.
+  - `preview_browser.py` — `PreviewBrowser`, the rendered preview. Reads no
+    image or stylesheet that converted text names, only embedded `data:` images.
+    Links go through `_on_link_clicked()` (`setOpenLinks(False)`): fragments
+    scroll, absolute `http`, `https` and `mailto` open externally, and the rest
+    do nothing. No `MainWindow` reference.
   - `queue_text.py` — plain functions for the pane's words: `queue_summary()`,
     `detail_status()` and `word_count()`.
   - `status_mark.py` — `StatusMark` and `paint_status_glyph()`, one silhouette
