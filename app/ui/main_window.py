@@ -138,11 +138,12 @@ _MARKDOWN_EXTENSIONS = ["extra", "sane_lists", "tables", HeadingIds()]
 
 
 def preview_excerpt(text: str) -> str:
-    """As much of `text` as the preview renders, ending at a line boundary if it has one."""
+    """As much of `text` as the preview renders, ending at a line boundary if that keeps
+    most of the limit: a title above one very long line must not preview only the title."""
     if len(text) <= PREVIEW_CHAR_LIMIT:
         return text
     line_end = text.rfind("\n", 0, PREVIEW_CHAR_LIMIT)
-    return text[: line_end + 1] if line_end >= 0 else text[:PREVIEW_CHAR_LIMIT]
+    return text[: line_end + 1] if line_end + 1 >= PREVIEW_CHAR_LIMIT // 2 else text[:PREVIEW_CHAR_LIMIT]
 
 
 def reveal_command(path: str) -> str | list[str]:

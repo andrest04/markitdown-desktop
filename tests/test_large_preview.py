@@ -70,6 +70,45 @@ class PreviewCase(WindowTestCase):
         return self.window.rendered_view.toPlainText()
 
 
+class CutFloorTests(PreviewCase):
+    def test_a_break_early_on_does_not_shrink_the_preview(self):
+        excerpt = preview_excerpt("# Title\n\n" + "x" * 200_000)
+        self.assertEqual(len(excerpt), PREVIEW_CHAR_LIMIT)
+
+    def test_a_break_at_the_very_start_does_not_either(self):
+        self.assertEqual(len(preview_excerpt("\n" + "x" * 200_000)), PREVIEW_CHAR_LIMIT)
+
+    def test_a_break_past_the_half_is_used(self):
+        head = "x" * (PREVIEW_CHAR_LIMIT // 2) + "\n"
+        self.assertEqual(preview_excerpt(head + "y" * 200_000), head)
+
+    def test_a_break_just_before_the_half_is_not(self):
+        head = "x" * (PREVIEW_CHAR_LIMIT // 2 - 2) + "\n"
+        self.assertEqual(len(preview_excerpt(head + "y" * 200_000)), PREVIEW_CHAR_LIMIT)
+
+    def test_characters_outside_the_basic_plane_stay_whole(self):
+        text = "\U0001F600" * (PREVIEW_CHAR_LIMIT * 2)
+        excerpt = preview_excerpt(text)
+        self.assertEqual(excerpt, "\U0001F600" * PREVIEW_CHAR_LIMIT)
+        item = make_item(text)
+        self.window.model.add_item(item)
+        self.window._update_drop_zone_prominence()
+        self.window.table_view.selectRow(0)
+        process_events()
+        shown = self.window.rendered_view.toPlainText()
+        self.assertNotIn("\ufffd", shown)
+        self.assertIn(tr("preview.truncated"), shown)
+
+    def test_the_notice_shows_after_such_a_cut(self):
+        self.window.model.add_item(make_item("# Title\n\n" + "x" * 200_000))
+        self.window._update_drop_zone_prominence()
+        self.window.table_view.selectRow(0)
+        process_events()
+        shown = self.window.rendered_view.toPlainText()
+        self.assertIn(tr("preview.truncated"), shown)
+        self.assertIn("x" * 1000, shown)
+
+
 class LargeResultTests(PreviewCase):
     def test_the_preview_renders_only_the_beginning_and_says_so(self):
         text = long_table()

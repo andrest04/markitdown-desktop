@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The Preview tab renders the first 50,000 characters of a very long result, cut
-  at a line, and says so above the text. The Markdown tab and the saved file stay
-  complete.
+  at a line where one falls past the halfway mark, and says so above the text. The
+  Markdown tab and the saved file stay complete.
 
 ### Fixed
 

@@ -163,8 +163,8 @@ nothing test-related should be left in the user's actual Downloads folder.
     Heading ids come from `HeadingIds` in `theme.py`, named by `heading_anchor()`: not
     the `toc` extension, which is quadratic on repeated headings. No `MainWindow`
     reference. `_render_markdown()` in `main_window.py`
-    renders only `preview_excerpt()`, up to `PREVIEW_CHAR_LIMIT` and cut at a line,
-    with a notice through `preview_html()`, and typing in the Markdown tab reaches
+    renders only `preview_excerpt()`, up to `PREVIEW_CHAR_LIMIT` and cut at a line if
+    that keeps at least half of it, with a notice through `preview_html()`, and typing in the Markdown tab reaches
     it through a single-shot timer. The item takes every keystroke at once, so
     nothing waits on that timer to be kept. On a scaled screen Qt checks for
     `name@2x.png` before `loadResource`, so `main.py` sets
