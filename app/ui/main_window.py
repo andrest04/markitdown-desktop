@@ -988,7 +988,7 @@ class MainWindow(QMainWindow):
         if not rows:
             return
         items = [self.model.item_at(row) for row in rows]
-        self.conversion_queue.enqueue([item for item in items if item is not None], self.conversion_options)
+        self.conversion_queue.retry([item for item in items if item is not None], self.conversion_options)
 
     def _refresh_preview_if_selected(self, item: QueueItem) -> None:
         row = self.model.row_of(item)
@@ -1102,11 +1102,14 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _has_result(item: QueueItem | None) -> bool:
-        return (
-            item is not None
-            and item.status == ItemStatus.DONE
-            and bool(item.markdown_result)
-        )
+        """Whether there is current text to hand over.
+
+        A failed retry's text is out of date, and a file holds it. If no file does, it
+        is the only copy left, so it stays reachable.
+        """
+        if item is None or not item.markdown_result:
+            return False
+        return item.status == ItemStatus.DONE or (item.status == ItemStatus.ERROR and not item.saved_path)
 
     def _status_detail(self, item: QueueItem) -> str:
         state = item.display_state
@@ -1288,7 +1291,7 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(tr("status.saved_copy_to", path=path), 4000)
 
     def action_export_all(self) -> None:
-        converted = [item for item in self.model.items() if item.status == ItemStatus.DONE and item.markdown_result]
+        converted = [item for item in self.model.items() if self._has_result(item)]
         if not converted:
             QMessageBox.information(self, tr("msgbox.nothing_to_export.title"), tr("msgbox.nothing_to_export.text"))
             return
@@ -1314,7 +1317,9 @@ class MainWindow(QMainWindow):
             )
 
     def action_copy_raw(self) -> None:
-        text = self.raw_view.toPlainText()
+        # From the item: a failed row shows its failure, so the tab may hold another's text.
+        item = self.model.item_at(self._selected_row())
+        text = item.markdown_result if item is not None else ""
         if not text:
             return
         QApplication.clipboard().setText(text)

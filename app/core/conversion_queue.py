@@ -16,7 +16,12 @@ from app.core.converter import (
     auto_save_markdown,
     classify_save_error,
 )
-from app.core.queue_model import FailureReason, QueueItem, QueueTableModel
+from app.core.queue_model import DisplayState, FailureReason, QueueItem, QueueTableModel
+
+
+def _save_is_all_it_needs(item: QueueItem) -> bool:
+    """Text edited away converts again instead, so no save ever writes an empty `.md`."""
+    return item.display_state == DisplayState.SAVE_FAILED and bool((item.markdown_result or "").strip())
 
 
 class ConversionQueue(QObject):
@@ -68,6 +73,17 @@ class ConversionQueue(QObject):
 
         self.progress_changed.emit(self._completed_count, self._total_count)
         return len(to_start)
+
+    def retry(self, items: list[QueueItem], options: ConversionOptions) -> int:
+        """Do what each item needs again; returns how many were dealt with.
+
+        A failed save still holds its text, and its source may be gone by now, so it
+        only saves. That takes no worker, so progress and the batch are left alone.
+        """
+        to_save = [item for item in items if item not in self._in_flight and _save_is_all_it_needs(item)]
+        for item in to_save:
+            self._save_again(item)
+        return len(to_save) + self.enqueue([item for item in items if item not in to_save], options)
 
     def unfinished_count(self) -> int:
         """Results still to come. A removed item's result has nowhere to go."""
@@ -142,6 +158,16 @@ class ConversionQueue(QObject):
         else:
             item.mark_saved(str(saved_path))
             self.item_saved.emit(item, str(saved_path))
+
+    def _save_again(self, item: QueueItem) -> None:
+        row = self._model.row_of(item)
+        if row < 0:
+            return
+        self._auto_save(item)
+        self._model.refresh_row(row)
+        self.item_finished.emit(item)
+        if item.save_error:
+            self.item_save_failed.emit(item, item.save_error)
 
     def _advance_progress(self, item: QueueItem) -> None:
         self._in_flight.pop(item, None)

@@ -211,6 +211,11 @@ and `es` dicts in `app/i18n.py` — Spanish must stay neutral/professional
 starts `_selected_retry_rows()`, and the action is enabled when that is not empty,
 while the other actions follow the first selected row. `_start_conversion()` does
 not filter: the row button, Enter and the context menu check their own row first.
+It calls `ConversionQueue.retry()`: a `SAVE_FAILED` item with text saves again on the
+GUI thread, with no worker and no change to progress or `batch_finished`, and any
+other item goes through `enqueue()`. `_has_result()` decides what Copy, Save a copy
+and Export reach: `DONE` items with text, and `ERROR` items whose text never reached a
+file. A failed retry of a saved item offers nothing, since that text is out of date.
 
 **Closing**: with results still to come (`unfinished_count()`, which leaves out
 removed items), `closeEvent` asks through `_confirm_close()`, defaulting to keep

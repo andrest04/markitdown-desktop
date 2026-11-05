@@ -13,6 +13,7 @@ from qt_support import WindowTestCase, process_events, pump_until, settle
 from app.core.queue_model import (
     COLUMN_NAME,
     COLUMN_STATUS,
+    DisplayState,
     FailureReason,
     ItemStatus,
     QueueItem,
@@ -85,10 +86,12 @@ class KeyboardRetryTests(RowTestCase):
                 self.converter.release("b.txt")
 
     def test_enter_retries_a_row_that_could_not_save(self):
-        self.add(not_saved("b.txt"))
+        item = not_saved("b.txt")
+        self.add(item)
         self._focus_row(0)
         self.press(Qt.Key.Key_Return)
-        self.assertTrue(pump_until(lambda: self.converter.call_count("b.txt") == 1))
+        self.assertEqual(self.converter.call_count("b.txt"), 0)
+        self.assertEqual(item.display_state, DisplayState.SAVED)
 
     def test_enter_does_nothing_on_a_row_that_is_fine(self):
         self.add(saved(), make_item("d.txt", ItemStatus.CONVERTING))

@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A very long result froze the window, for about 24 seconds with a 50,000-row
   table, each time it was shown and on every keystroke in the Markdown tab. The
   preview now also waits for a pause in typing.
+- Retry after a failed save converted the file again, so it failed if the source
+  had gone in the meantime, and the text was out of reach. It now saves the text
+  already in memory, including edits made since. Text that never reached a file
+  stays available through Copy, Save a copy and Export, even if a later conversion
+  of that item fails.
 - Changing the hints in Advanced settings had no effect on a file already
   converted, so a wrong encoding could not be corrected without losing the hint.
   Accepting changed hints now converts it again at once. The earlier file stays,
