@@ -690,12 +690,19 @@ class MainWindow(QMainWindow):
 
     def _restore_settings(self) -> None:
         geometry = self.settings.value("window/geometry")
-        if geometry is not None:
-            self.restoreGeometry(geometry)
+        restored = geometry is not None and self.restoreGeometry(geometry)
+        # A window closed maximized comes back at its normal geometry, whose position
+        # is the frame's, so only one closed at its normal size has the client area's.
+        client_position = restored and self.windowState() == Qt.WindowState.WindowNoState
         # The app always opens on the empty screen, whatever size it closed at;
         # only the position carries over.
         self.setWindowState(Qt.WindowState.WindowNoState)
-        self._apply_window_size(empty=True)
+        if client_position:
+            # move() takes the frame's position, so it would lower the window by its
+            # title bar on every launch.
+            self.setGeometry(self._fitted_geometry(empty=True))
+        else:
+            self._apply_window_size(empty=True)
         theme_pref = self.settings.value("theme/preference", "system")
         self._theme_preference = theme_pref
         self._sync_theme_menu_checks()
@@ -748,6 +755,12 @@ class MainWindow(QMainWindow):
         always fully on screen. A maximized window stays as the person set it."""
         if self.isMaximized() or self.isFullScreen():
             return
+        fitted = self._fitted_geometry(empty)
+        self.resize(fitted.size())
+        self.move(fitted.topLeft())
+
+    def _fitted_geometry(self, empty: bool) -> QRect:
+        """The size for this screen, at the current position moved fully on screen."""
         if empty:
             width, height = COMPACT_WINDOW_SIZE
         else:
@@ -758,10 +771,9 @@ class MainWindow(QMainWindow):
         frame_height = self.frameGeometry().height() - self.height()
         width = min(width, area.width() - frame_width)
         height = min(height, area.height() - frame_height)
-        self.resize(width, height)
         left = max(area.left(), min(self.x(), area.right() + 1 - width - frame_width))
         top = max(area.top(), min(self.y(), area.bottom() + 1 - height - frame_height))
-        self.move(left, top)
+        return QRect(left, top, width, height)
 
     def closeEvent(self, event) -> None:
         unfinished = self.conversion_queue.unfinished_count()

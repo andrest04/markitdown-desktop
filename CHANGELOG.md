@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The preview no longer reads local files or network shares for images and
   stylesheets that converted text points at. Images embedded in the text still
   show.
+- The window opened lower on every launch, by the height of its title bar. It now
+  opens where it was.
 
 ## [1.4.0] - 2026-11-02
 
