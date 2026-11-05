@@ -210,7 +210,8 @@ and `es` dicts in `app/i18n.py` — Spanish must stay neutral/professional
 
 **Retry**: `action_convert_selected()` (the Retry action and header button) only
 starts `_selected_retry_rows()`, and the action is enabled when that is not empty,
-while the other actions follow the first selected row. `_start_conversion()` does
+while the other actions follow the first selected row. The header button is visible
+under the same condition, and is then the one primary. `_start_conversion()` does
 not filter: the row button, Enter and the context menu check their own row first.
 It calls `ConversionQueue.retry()`: a `SAVE_FAILED` item with text saves again on the
 GUI thread, with no worker and no change to progress or `batch_finished`, and any

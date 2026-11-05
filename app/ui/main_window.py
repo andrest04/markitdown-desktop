@@ -1009,7 +1009,8 @@ class MainWindow(QMainWindow):
         if row >= 0 and self._selected_row() == row:
             self._refresh_preview()
         else:
-            self._refresh_retry_action()
+            # Retry follows the whole selection, and this may be one of the other rows.
+            self._update_preview_header(self.model.item_at(self._selected_row()))
 
     def _on_item_started(self, item: QueueItem) -> None:
         self._refresh_preview_if_selected(item)
@@ -1092,7 +1093,8 @@ class MainWindow(QMainWindow):
         self.preview_header_status.style().polish(self.preview_header_status)
 
         saved = state == DisplayState.SAVED
-        retry = state in RETRY_STATES
+        # Like the action, for the whole selection; everything else is about this row.
+        retry = state in RETRY_STATES or self.retry_action.isEnabled()
         copy = self._has_result(item)
         self.open_file_btn.setVisible(saved)
         self.reveal_btn.setVisible(saved)
