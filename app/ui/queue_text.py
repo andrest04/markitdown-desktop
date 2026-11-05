@@ -29,8 +29,10 @@ def detail_status(item: QueueItem) -> str:
     state = item.display_state
     if state == DisplayState.SAVED:
         status = tr("status.saved_as", name=os.path.basename(item.saved_path))
+        text = item.saved_text
     elif state == DisplayState.DONE:
         status = tr(state.value)
+        text = item.markdown_result
     elif state == DisplayState.SAVE_FAILED:
         return tr("status.save_failed_detail", error=tr(item.save_error_reason.value))
     elif state == DisplayState.ERROR:
@@ -40,9 +42,7 @@ def detail_status(item: QueueItem) -> str:
         return tr("preview.converting")
     else:
         return tr("preview.pending")
-    if item.markdown_result is None:
-        return status
-    return f"{status}, {_words_text(item.markdown_result)}"
+    return status if text is None else f"{status}, {_words_text(text)}"
 
 
 # (singular key, plural key). Written out so every key stays greppable.

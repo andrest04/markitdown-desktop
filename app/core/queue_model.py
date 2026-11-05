@@ -99,6 +99,7 @@ class QueueItem:
     charset_override: str = ""
     # Result of the automatic save-to-Downloads step (set after conversion).
     saved_path: str = ""
+    saved_text: str | None = None  # what that file holds; edits change only markdown_result
     save_error: str = ""  # raw OS text
     save_error_reason: FailureReason = FailureReason.SAVE_GENERIC
 
@@ -154,11 +155,13 @@ class QueueItem:
 
     def mark_saved(self, path: str) -> None:
         self.saved_path = str(path)
+        self.saved_text = self.markdown_result
         self.save_error = ""
 
     def mark_save_failed(self, error: str, reason: FailureReason = FailureReason.SAVE_GENERIC) -> None:
         """The conversion itself succeeded, so the status stays DONE."""
         self.saved_path = ""
+        self.saved_text = None
         self.save_error = str(error)
         self.save_error_reason = reason
 
