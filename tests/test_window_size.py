@@ -11,6 +11,8 @@ from app.ui.main_window import COMPACT_WINDOW_SIZE, WORKING_WINDOW_SIZE, MainWin
 
 DESKTOP = QRect(0, 0, 1920, 1040)
 SMALL_LAPTOP = QRect(0, 0, 1000, 700)
+# restoreGeometry() keeps a window on the real screen, whatever _available_area says.
+OFFSCREEN_SCREEN = QRect(0, 0, 800, 800)
 
 
 class WindowSizeTestCase(WindowTestCase):
@@ -121,6 +123,74 @@ class GrowingTests(WindowSizeTestCase):
             self.clear()
             self.add_sources("b.txt")
         resize.assert_not_called()
+
+
+class PositionAcrossLaunchesTests(WindowSizeTestCase):
+    """A shown window has a frame, and the position it saves is read back before it has one."""
+
+    def launch(self, saved: FakeSettings, area: QRect = OFFSCREEN_SCREEN) -> MainWindow:
+        with (
+            mock.patch("app.ui.main_window.QSettings", lambda *args: saved),
+            mock.patch.object(MainWindow, "_available_area", lambda window: area),
+        ):
+            window = MainWindow()
+            self.addCleanup(window.deleteLater)
+            window.show()
+            process_events()
+        return window
+
+    def test_the_offscreen_platform_gives_windows_a_frame(self):
+        window = self.launch(FakeSettings())
+        self.assertGreater(window.geometry().top(), window.frameGeometry().top())
+        window.close()
+
+    def test_a_position_stays_put_with_nothing_moved(self):
+        saved = FakeSettings()
+        window = self.launch(saved)
+        window.move(20, 200)
+        process_events()
+        moved_to = window.pos()
+        window.close()
+        for _launch in range(3):
+            window = self.launch(saved)
+            self.assertEqual(window.pos(), moved_to)
+            self.assertEqual(window.size(), QSize(*COMPACT_WINDOW_SIZE))
+            window.close()
+
+    def test_a_window_closed_maximized_comes_back_where_it_was(self):
+        saved = FakeSettings()
+        window = self.launch(saved)
+        window.move(20, 200)
+        process_events()
+        moved_to = window.pos()
+        window.showMaximized()
+        process_events()
+        window.close()
+        for _launch in range(2):
+            window = self.launch(saved)
+            self.assertFalse(window.isMaximized())
+            self.assertEqual(window.pos(), moved_to)
+            window.close()
+
+    def test_a_position_low_on_the_screen_comes_back_above_the_bottom_edge(self):
+        area = QRect(0, 0, 800, 600)
+        saved = FakeSettings()
+        window = self.launch(saved)
+        window.move(20, 280)
+        process_events()
+        window.close()
+        positions = []
+        for _launch in range(3):
+            window = self.launch(saved, area)
+            self.assertLessEqual(window.geometry().bottom(), area.bottom())
+            positions.append(window.pos())
+            window.close()
+        self.assertEqual(positions[1:], positions[:-1])
+
+    def test_a_first_launch_opens_with_its_frame_on_screen(self):
+        window = self.launch(FakeSettings())
+        self.assertEqual(window.frameGeometry().topLeft(), OFFSCREEN_SCREEN.topLeft())
+        window.close()
 
 
 if __name__ == "__main__":
