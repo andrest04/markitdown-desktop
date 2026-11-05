@@ -114,7 +114,8 @@ nothing test-related should be left in the user's actual Downloads folder.
   `QueueItem.display_state` (a derived `DisplayState` enum, also translation
   keys) and the `mark_*()` transitions. A failed retry keeps `saved_path`,
   because the earlier file still exists. `mark_saved()` records `saved_text`, which
-  the header counts, since edits only change `markdown_result`. `FailureReason` values are keys too:
+  the header counts once into `saved_word_count`, since edits only change
+  `markdown_result`. `FailureReason` values are keys too:
   an item stores the key plus the raw text, and `row_status_text()` and
   `failure_reason_text()` resolve them at display time. Rows carry that text in
   `Qt.AccessibleTextRole` for screen readers.

@@ -1072,7 +1072,8 @@ class MainWindow(QMainWindow):
             self._refresh_preview()
         else:
             # Retry follows the whole selection, and this may be one of the other rows.
-            self._update_preview_header(self.model.item_at(self._selected_row()))
+            self._refresh_retry_action()
+            self._refresh_header_buttons(self.model.item_at(self._selected_row()))
 
     def _on_item_started(self, item: QueueItem) -> None:
         self._refresh_preview_if_selected(item)
@@ -1150,14 +1151,19 @@ class MainWindow(QMainWindow):
         self.preview_header.setVisible(True)
         self.preview_header_name.setToolTip(item.source)
         self._fit_preview_title()
-        state = item.display_state
-        kind = _HEADER_KIND[state]
+        kind = _HEADER_KIND[item.display_state]
         self.preview_header_status.setText(detail_status(item))
         self.preview_header_status.setToolTip(self._status_detail(item))
         self.preview_header_status.setProperty("kind", kind)
         self.preview_header_status.style().unpolish(self.preview_header_status)
         self.preview_header_status.style().polish(self.preview_header_status)
+        self._refresh_header_buttons(item)
 
+    def _refresh_header_buttons(self, item: QueueItem | None) -> None:
+        """The header's actions, apart from its words, which can take a while to count."""
+        if item is None:
+            return
+        state = item.display_state
         saved = state == DisplayState.SAVED
         # Like the action, for the whole selection; everything else is about this row.
         retry = state in RETRY_STATES or self.retry_action.isEnabled()

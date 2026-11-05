@@ -18,8 +18,14 @@ def word_count(markdown: str | None) -> int:
     return sum(1 for token in (markdown or "").split() if any(char.isalnum() for char in token))
 
 
-def _words_text(markdown: str) -> str:
-    count = word_count(markdown)
+def _saved_word_count(item: QueueItem) -> int | None:
+    """Counted once per saved text: that text cannot change, and it may be very long."""
+    if item.saved_word_count is None and item.saved_text is not None:
+        item.saved_word_count = word_count(item.saved_text)
+    return item.saved_word_count
+
+
+def _words_text(count: int) -> str:
     locale = QLocale(QLocale.Language.Spanish if i18n_manager.language == LANG_ES else QLocale.Language.English)
     return tr("detail.words.one" if count == 1 else "detail.words.other", count=locale.toString(count))
 
@@ -29,10 +35,10 @@ def detail_status(item: QueueItem) -> str:
     state = item.display_state
     if state == DisplayState.SAVED:
         status = tr("status.saved_as", name=os.path.basename(item.saved_path))
-        text = item.saved_text
+        count = _saved_word_count(item)
     elif state == DisplayState.DONE:
         status = tr(state.value)
-        text = item.markdown_result
+        count = None if item.markdown_result is None else word_count(item.markdown_result)
     elif state == DisplayState.SAVE_FAILED:
         return tr("status.save_failed_detail", error=tr(item.save_error_reason.value))
     elif state == DisplayState.ERROR:
@@ -42,7 +48,7 @@ def detail_status(item: QueueItem) -> str:
         return tr("preview.converting")
     else:
         return tr("preview.pending")
-    return status if text is None else f"{status}, {_words_text(text)}"
+    return status if count is None else f"{status}, {_words_text(count)}"
 
 
 # (singular key, plural key). Written out so every key stays greppable.
