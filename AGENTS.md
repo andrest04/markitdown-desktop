@@ -198,6 +198,15 @@ When adding a new user-facing string: add the key to **both** the `en`
 and `es` dicts in `app/i18n.py` — Spanish must stay neutral/professional
 (no voseo, no regional slang), not Rioplatense.
 
+**Closing**: with results still to come (`unfinished_count()`, which leaves out
+removed items), `closeEvent` asks through `_confirm_close()`, defaulting to keep
+converting. Close anyway calls `cancel_unstarted()`, the `discard()` path. A
+running worker cannot be interrupted, so after `app.exec()` `end_process()` in
+`main.py` syncs settings and, only if the pool still has an active thread, ends
+with `os._exit`, since a normal exit would wait for it and then raise
+`Signal source has been deleted`. Tests closing a window with work in flight must
+patch `QMessageBox.exec`, or the real dialog blocks them.
+
 **Threading model**: conversions never block the UI thread. Each queue
 item gets its own `ConversionWorker` (`QRunnable`) submitted by
 `ConversionQueue` to the global `QThreadPool`; `WorkerSignals`

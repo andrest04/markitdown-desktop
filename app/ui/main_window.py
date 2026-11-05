@@ -789,10 +789,31 @@ class MainWindow(QMainWindow):
         self.move(left, top)
 
     def closeEvent(self, event) -> None:
+        unfinished = self.conversion_queue.unfinished_count()
+        if unfinished and not self._confirm_close(unfinished):
+            event.ignore()
+            return
+        self.conversion_queue.cancel_unstarted()
         self.settings.setValue("window/geometry", self.saveGeometry())
         if not self._showing_empty:
             self._remember_working_size()
         super().closeEvent(event)
+
+    def _confirm_close(self, unfinished: int) -> bool:
+        """Closing loses these results, so keeping the window is the easy answer."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(tr("msgbox.close_busy.title"))
+        if unfinished == 1:
+            box.setText(tr("msgbox.close_busy.text.one"))
+        else:
+            box.setText(tr("msgbox.close_busy.text.other", count=unfinished))
+        keep = box.addButton(tr("msgbox.close_busy.keep"), QMessageBox.ButtonRole.RejectRole)
+        close_anyway = box.addButton(tr("msgbox.close_busy.close"), QMessageBox.ButtonRole.DestructiveRole)
+        box.setDefaultButton(keep)
+        box.setEscapeButton(keep)
+        box.exec()
+        return box.clickedButton() is close_anyway
 
     def _on_language_changed(self, language: str) -> None:
         self._sync_language_buttons()

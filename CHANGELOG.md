@@ -7,8 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Closing the window with conversions unfinished now asks first, with the count.
+  Keep converting is the default and loses nothing. Close anyway cancels what has
+  not started and ends the app without waiting for what is running.
+
 ### Fixed
 
+- Closing during a conversion silently lost the result, and the app kept running
+  without a window until the conversion ended.
 - On Linux with Python 3.11, the app could abort after about 20 conversions in
   one session. PySide6 is now held below 6.12.
 - Clicking a relative or `file:` link in the preview blanked it or replaced it

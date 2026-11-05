@@ -21,6 +21,7 @@ def _configure_qt_fonts() -> None:
 
 _configure_qt_fonts()
 
+from PySide6.QtCore import QThreadPool
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
@@ -51,6 +52,20 @@ def set_windows_app_id() -> None:
         pass  # Only the taskbar grouping is lost; the window keeps its icon.
 
 
+def end_process(exit_code: int, settings) -> int:
+    """Flush settings, and do not wait for a conversion still running.
+
+    markitdown blocks, so a running worker cannot be interrupted. A normal exit
+    would keep the process alive, with no window, until the worker returned, which
+    then raises because the signals it emits through are gone. `os._exit` skips all
+    of that: nothing is half written, since saves only happen on the GUI thread.
+    """
+    settings.sync()
+    if QThreadPool.globalInstance().activeThreadCount():
+        os._exit(exit_code)
+    return exit_code
+
+
 def main() -> int:
     set_windows_app_id()
     app = QApplication(sys.argv)
@@ -61,7 +76,7 @@ def main() -> int:
     window = MainWindow()
     window.show()
 
-    return app.exec()
+    return end_process(app.exec(), window.settings)
 
 
 if __name__ == "__main__":
