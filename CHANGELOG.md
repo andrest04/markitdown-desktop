@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A very long result froze the window, for about 24 seconds with a 50,000-row
   table, each time it was shown and on every keystroke in the Markdown tab. The
   preview now also waits for a pause in typing.
+- "All conversions finished" stayed in the status bar for up to 4 seconds into a
+  new conversion. Starting new work now clears it.
+- Adding or finishing something with Shift held left no row selected and the preview
+  empty, although the file was saved correctly. Selecting a row for the app's own
+  reasons no longer depends on the keys held down.
 - A link such as `[go](#section)` did not scroll to a plain `# Section` heading. It
   does now, with headings named as GitHub names them.
 - If the conversions finished while the closing question was open, it still said

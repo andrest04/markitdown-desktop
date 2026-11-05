@@ -9,7 +9,15 @@ import sys
 import webbrowser
 
 import markdown as markdown_lib
-from PySide6.QtCore import QEvent, QRect, QSettings, Qt, QTimer, QUrl
+from PySide6.QtCore import (
+    QEvent,
+    QItemSelectionModel,
+    QRect,
+    QSettings,
+    Qt,
+    QTimer,
+    QUrl,
+)
 from PySide6.QtGui import (
     QAction,
     QDesktopServices,
@@ -217,6 +225,7 @@ class MainWindow(QMainWindow):
         self.conversion_queue.item_failed.connect(self._on_item_failed)
         self.conversion_queue.item_saved.connect(self._on_item_saved)
         self.conversion_queue.item_save_failed.connect(self._on_item_save_failed)
+        self.conversion_queue.batch_started.connect(self._on_batch_started)
         self.conversion_queue.progress_changed.connect(self._on_progress_changed)
         self.conversion_queue.batch_finished.connect(self._on_batch_finished)
 
@@ -966,8 +975,8 @@ class MainWindow(QMainWindow):
             parts = [tr("status.added_files", count=len(new_items))]
             if already_queued:
                 parts.append(tr("status.some_already_queued", count=already_queued))
-            self.status_bar.showMessage(" ".join(parts + skipped), 4000)
             self._enqueue_and_start(new_items)
+            self.status_bar.showMessage(" ".join(parts + skipped), 4000)
             return
         if already_queued:
             # Nothing to add is not the same as nothing supported.
@@ -988,8 +997,17 @@ class MainWindow(QMainWindow):
         """Add new items to the queue and start converting them right away."""
         rows = [self.model.add_item(item) for item in items]
         if self._selected_row() < 0:
-            self.table_view.selectRow(rows[0])
+            self._select_row(rows[0])
         self.conversion_queue.enqueue(items, self.conversion_options)
+
+    def _select_row(self, row: int) -> None:
+        """Select one row for the app's own reasons.
+
+        `QTableView.selectRow` is for the person's input and reads the keys held down:
+        with Shift it selects from an anchor nothing set, which is no row at all.
+        """
+        flags = QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows
+        self.table_view.selectionModel().setCurrentIndex(self.model.index(row, 0), flags)
 
     def action_add_url(self) -> None:
         url = self.url_edit.text().strip()
@@ -1013,7 +1031,7 @@ class MainWindow(QMainWindow):
             # Removing a row empties the selection, and Delete needs one to act again.
             last_row = self.model.rowCount() - 1
             if last_row >= 0:
-                self.table_view.selectRow(min(rows[0], last_row))
+                self._select_row(min(rows[0], last_row))
             self._refresh_preview()
 
     def action_clear_all(self) -> None:
@@ -1054,7 +1072,7 @@ class MainWindow(QMainWindow):
 
     def _on_item_finished(self, item: QueueItem) -> None:
         if self._selected_row() < 0:
-            self.table_view.selectRow(self.model.row_of(item))
+            self._select_row(self.model.row_of(item))
         else:
             self._refresh_preview_if_selected(item)
 
@@ -1068,6 +1086,10 @@ class MainWindow(QMainWindow):
 
     def _on_item_save_failed(self, item: QueueItem, error: str) -> None:
         self.status_bar.showMessage(tr("status.autosave_failed", error=tr(item.save_error_reason.value)), 6000)
+
+    def _on_batch_started(self) -> None:
+        """New work, so what the strip said about earlier work is out of date."""
+        self.status_bar.clearMessage()
 
     def _on_progress_changed(self, completed: int, total: int) -> None:
         self.progress_bar.setMaximum(total)
@@ -1311,7 +1333,7 @@ class MainWindow(QMainWindow):
     def _show_queue_menu(self, pos) -> None:
         index = self.table_view.indexAt(pos)
         if index.isValid() and not self.table_view.selectionModel().isSelected(index):
-            self.table_view.selectRow(index.row())
+            self._select_row(index.row())
         item = self.model.item_at(index.row()) if index.isValid() else None
         menu = QMenu(self)
         if item is not None and item.saved_path:

@@ -37,6 +37,7 @@ class ConversionQueue(QObject):
     item_failed = Signal(object, str)
     item_saved = Signal(object, str)
     item_save_failed = Signal(object, str)
+    batch_started = Signal()  # work begins from idle; batch_finished is the end of it
     progress_changed = Signal(int, int)  # completed, total
     batch_finished = Signal()
 
@@ -57,9 +58,11 @@ class ConversionQueue(QObject):
             return 0
 
         # Totals accumulate across overlapping batches and reset only when idle.
-        if not self._in_flight:
+        starting = not self._in_flight
+        if starting:
             self._completed_count = 0
             self._total_count = 0
+            self.batch_started.emit()
         self._total_count += len(to_start)
 
         pool = QThreadPool.globalInstance()
@@ -81,9 +84,11 @@ class ConversionQueue(QObject):
         only saves. That takes no worker, so progress and the batch are left alone.
         """
         to_save = [item for item in items if item not in self._in_flight and _save_is_all_it_needs(item)]
+        # Conversions first: starting a batch clears the message a save leaves.
+        started = self.enqueue([item for item in items if item not in to_save], options)
         for item in to_save:
             self._save_again(item)
-        return len(to_save) + self.enqueue([item for item in items if item not in to_save], options)
+        return len(to_save) + started
 
     def unfinished_count(self) -> int:
         """Results still to come. A removed item's result has nowhere to go."""

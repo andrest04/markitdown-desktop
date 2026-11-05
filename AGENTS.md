@@ -121,7 +121,8 @@ nothing test-related should be left in the user's actual Downloads folder.
 - `app/core/conversion_queue.py` — `ConversionQueue(QObject)` owns the
   convert-then-auto-save contract: dispatch, in-flight guard, transitions,
   progress that accumulates across overlapping batches, and auto-save. It
-  emits signals and never calls `tr()`; the window translates. Worker signals
+  emits signals and never calls `tr()`; the window translates. `batch_started` fires
+  when work begins from idle, and the window clears the status bar. Worker signals
   connect to its bound slots, so results and saves run on the GUI thread.
   `discard()` is called after rows are removed: a worker not yet started is
   cancelled with `QThreadPool.tryTake` and leaves the total; a running one
@@ -148,7 +149,9 @@ nothing test-related should be left in the user's actual Downloads folder.
     `MainWindow.eventFilter`. Delete removes rows only while the list has
     focus (`WidgetShortcut`), so a file drop hands the list focus unless
     someone is typing or a dialog is open, and removing rows selects the row
-    now at the first removed position. `row_tooltip()` lives here too.
+    now at the first removed position. `row_tooltip()` lives here too. The window
+    selects rows itself through `_select_row()`, not `QTableView.selectRow()`, which
+    reads the keys held down and selects nothing with Shift.
   - `preview_browser.py` — `PreviewBrowser`, the rendered preview. Reads no
     image or stylesheet that converted text names, only embedded `data:` images.
     Links go through `_on_link_clicked()` (`setOpenLinks(False)`): fragments
