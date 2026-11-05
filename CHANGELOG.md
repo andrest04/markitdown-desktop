@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- On Linux with Python 3.11, the app could abort after about 20 conversions in
+  one session. PySide6 is now held below 6.12.
+
 ## [1.4.0] - 2026-11-02
 
 ### Added
