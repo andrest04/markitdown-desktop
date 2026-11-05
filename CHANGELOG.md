@@ -24,7 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty, although the file was saved correctly. Selecting a row for the app's own
   reasons no longer depends on the keys held down.
 - A link such as `[go](#section)` did not scroll to a plain `# Section` heading. It
-  does now, with headings named as GitHub names them.
+  does now, with headings named and numbered as GitHub does (`notes`, `notes-1`), and
+  a link differing only in case still finds its heading.
 - If the conversions finished while the closing question was open, it still said
   results would be lost, and Keep converting meant closing a second time. The
   question now goes away once nothing is left, and the count stays current until

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import ntpath
 import os
-import re
 import subprocess
 import sys
 import webbrowser
@@ -83,6 +82,7 @@ from app.ui.status_mark import StatusMark
 from app.ui.theme import (
     PREVIEW_MARGIN,
     READING_WIDTH,
+    HeadingIds,
     apply_fusion_palette,
     document_css_for,
     needs_full_width,
@@ -134,17 +134,7 @@ def _save_failure_text(reason: FailureReason, detail: str) -> str:
     return f"{tr(reason.value)} ({detail})"
 
 
-def heading_anchor(heading: str, separator: str) -> str:
-    """The name a heading goes by, as GitHub makes it, which is what links in Markdown
-    mostly follow: `Credits & License` is `credits--license`, and accents stay."""
-    name = re.sub(r"[^\w\- ]", "", heading.strip().lower())
-    return name.replace(" ", separator)
-
-
-# `toc` only for the ids it gives headings, which QTextBrowser takes as anchors. An empty
-# marker stops it turning a literal `[TOC]` in converted text into a contents list.
-_MARKDOWN_EXTENSIONS = ["extra", "sane_lists", "tables", "toc"]
-_MARKDOWN_EXTENSION_CONFIGS = {"toc": {"marker": "", "slugify": heading_anchor}}
+_MARKDOWN_EXTENSIONS = ["extra", "sane_lists", "tables", HeadingIds()]
 
 
 def preview_excerpt(text: str) -> str:
@@ -1326,11 +1316,7 @@ class MainWindow(QMainWindow):
     def _render_markdown(self, text: str) -> None:
         self._render_timer.stop()
         excerpt = preview_excerpt(text)
-        html = (
-            markdown_lib.markdown(excerpt, extensions=_MARKDOWN_EXTENSIONS, extension_configs=_MARKDOWN_EXTENSION_CONFIGS)
-            if excerpt
-            else ""
-        )
+        html = markdown_lib.markdown(excerpt, extensions=_MARKDOWN_EXTENSIONS) if excerpt else ""
         self._preview_full_width = needs_full_width(html)
         self._fit_reading_width()
         notice = self._truncation_notice() if len(excerpt) < len(text) else ""
