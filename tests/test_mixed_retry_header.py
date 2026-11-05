@@ -120,3 +120,17 @@ class EnterTests(MixedSelectionTestCase):
         self.press_enter_on(1)
         self.assertEqual(self.converter.call_count("good.txt"), 1)
         self.assertEqual(self.converter.call_count("bad.txt"), 2)
+
+    def test_enter_retries_its_own_row_and_not_the_others_selected(self):
+        self.converter.failures["worse.txt"] = "boom"
+        self.add_sources("worse.txt")
+        self.converter.release("worse.txt")
+        self.assertTrue(pump_until(lambda: self.item_named("worse.txt").status == ItemStatus.ERROR))
+        settle()
+        del self.converter.failures["worse.txt"]
+
+        self.press_enter_on(2)
+
+        self.assertEqual(self.converter.call_count("worse.txt"), 2)
+        self.assertEqual(self.converter.call_count("bad.txt"), 1)
+        self.assertEqual(self.converter.call_count("good.txt"), 1)
