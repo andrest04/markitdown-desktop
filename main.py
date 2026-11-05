@@ -19,7 +19,18 @@ def _configure_qt_fonts() -> None:
         os.environ["QT_QPA_FONTDIR"] = candidate
 
 
+def _disable_qt_2x_image_lookup() -> None:
+    """Keep Qt from checking for `name@2x.png` on any image it is asked to show.
+
+    On a scaled screen Qt does that before the preview can refuse the image, so a
+    share named in converted text freezes the window while the network answers.
+    The app ships no raster 2x images, and Qt reads this once, so it goes first.
+    """
+    os.environ["QT_HIGHDPI_DISABLE_2X_IMAGE_LOADING"] = "1"
+
+
 _configure_qt_fonts()
+_disable_qt_2x_image_lookup()
 
 from PySide6.QtCore import QThreadPool
 from PySide6.QtGui import QIcon

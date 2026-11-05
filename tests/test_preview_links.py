@@ -6,6 +6,9 @@ are caught by Qt's own URL handlers, so no test can start a real browser.
 from __future__ import annotations
 
 import base64
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +19,8 @@ from PySide6.QtTest import QTest
 from qt_support import WindowTestCase, process_events, pump_until
 
 from app.core.queue_model import ItemStatus
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 EXTERNAL_SCHEMES = ("http", "https", "mailto", "file")
 
@@ -161,6 +166,75 @@ class ImageTests(PreviewTestCase):
         self.assertEqual(loaded, "")
         self.show_markdown(f'<link rel="stylesheet" href="{sheet.as_uri()}">\n\nStill here')
         self.assertIn("Still here", self.view.toPlainText())
+
+
+_HIGH_DPI_RENDER = r"""
+import sys
+
+import main  # The setting under test is whatever importing the entry point applies.
+
+from PySide6.QtCore import QUrl
+from PySide6.QtWidgets import QApplication
+
+from app.ui.preview_browser import PreviewBrowser
+
+asked = []
+
+
+class Spy(PreviewBrowser):
+    def loadResource(self, kind, name):
+        asked.append(name.toString())
+        return super().loadResource(kind, name)
+
+
+app = QApplication([])
+view = Spy()
+view.resize(300, 300)
+view.show()
+view.setHtml('<p>text<img src="%s"/></p>' % QUrl.fromLocalFile(sys.argv[1]).toString())
+app.processEvents()
+view.viewport().grab()
+print("ratio", view.devicePixelRatio())
+for name in asked:
+    print("asked", name)
+"""
+
+
+class HighDpiImageTests(unittest.TestCase):
+    """Qt looks for `name@2x.png` before `loadResource` hears of the image.
+
+    On a share that look alone freezes the window for as long as the network takes,
+    so the entry point turns it off. This runs the real setting in a real process,
+    since Qt reads it once. A sibling file stands in for the share: no network.
+    """
+
+    def test_the_entry_point_stops_qt_looking_for_2x_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            image = Path(folder) / "secret.png"
+            picture = QImage(40, 30, QImage.Format.Format_RGB32)
+            picture.fill(0xFF0000)
+            self.assertTrue(picture.save(str(image)))
+            self.assertTrue(picture.save(str(Path(folder) / "secret@2x.png")))
+
+            env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "QT_SCALE_FACTOR": "2"}
+            # Importing `main` in this process sets it too; the child must get it from main.py.
+            env.pop("QT_HIGHDPI_DISABLE_2X_IMAGE_LOADING", None)
+            result = subprocess.run(
+                [sys.executable, "-c", _HIGH_DPI_RENDER, str(image)],
+                cwd=REPO_ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=120,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        lines = result.stdout.splitlines()
+        self.assertIn("ratio 2.0", lines, "without a 2x screen this test would prove nothing")
+        asked = [line.removeprefix("asked ") for line in lines if line.startswith("asked ")]
+        self.assertEqual([name for name in asked if "@2x" in name], [])
+        self.assertTrue(any(name.endswith("secret.png") for name in asked), asked)
 
 
 if __name__ == "__main__":
