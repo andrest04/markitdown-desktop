@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clicking a relative or `file:` link in the preview blanked it or replaced it
   with that local file. Links inside the text still scroll, web and mail links
   still open outside the app, and anything else now does nothing.
+- A link whose server accepts the connection and never answers kept its item
+  converting forever. It now fails as a connection problem after 10 seconds to
+  connect or 60 seconds without data. Large downloads with steady data are not
+  cut off.
 - The preview no longer reads local files or network shares for images and
   stylesheets that converted text points at. Images embedded in the text still
   show.

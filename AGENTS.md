@@ -85,7 +85,10 @@ nothing test-related should be left in the user's actual Downloads folder.
   replaces the value, so workers never share a mutable object.
   `ConversionOptions.build_markitdown()` maps the
   GUI's option toggles to real `MarkItDown(...)` constructor kwargs
-  (`enable_plugins`, `docintel_endpoint`, `cu_endpoint`, `cu_analyzer_id`).
+  (`enable_plugins`, `docintel_endpoint`, `cu_endpoint`, `cu_analyzer_id`),
+  and always passes `requests_session` a `_TimeoutSession`, which applies
+  `URL_TIMEOUT` (connect, read) to requests that set none and repeats
+  markitdown's `Accept` header, set only on a session of its own.
   `convert_item()` raises `NoTextFound` on whitespace-only output, which
   markitdown does not, and maps per-item extension/mimetype/charset overrides to a
   `StreamInfo` object and calls `convert_local()` or `convert_uri()`

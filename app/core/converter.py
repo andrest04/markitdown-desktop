@@ -60,6 +60,7 @@ warnings.filterwarnings(
     module=r"pydub\.utils",
 )
 
+import requests
 import shiboken6
 from markitdown import (
     FileConversionException,
@@ -201,6 +202,28 @@ def supported_name_filter(label: str) -> str:
     return f"{label} ({patterns})"
 
 
+# Seconds to wait for a connection, then for the next bytes from the server. The
+# read limit covers each gap in the data, so a large steady download is not cut.
+URL_TIMEOUT = (10, 60)
+
+
+class _TimeoutSession(requests.Session):
+    """Gives up on a silent server: requests waits forever unless told otherwise.
+
+    `send` is where every request passes, redirects included. markitdown only sets
+    its Accept header on a session of its own, so that comes along here.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.headers["Accept"] = "text/markdown, text/html;q=0.9, text/plain;q=0.8, */*;q=0.1"
+
+    def send(self, request, **kwargs):
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = URL_TIMEOUT
+        return super().send(request, **kwargs)
+
+
 @dataclass(frozen=True)
 class ConversionOptions:
     """Conversion settings, mapped to real MarkItDown kwargs.
@@ -220,7 +243,7 @@ class ConversionOptions:
     cu_analyzer_id: str = ""
 
     def build_markitdown(self) -> MarkItDown:
-        kwargs: dict = {"enable_plugins": self.enable_plugins}
+        kwargs: dict = {"enable_plugins": self.enable_plugins, "requests_session": _TimeoutSession()}
         if self.docintel_enabled and self.docintel_endpoint.strip():
             kwargs["docintel_endpoint"] = self.docintel_endpoint.strip()
         if self.cu_enabled and self.cu_endpoint.strip():
