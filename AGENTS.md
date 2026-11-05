@@ -228,8 +228,9 @@ file. A failed retry of a saved item offers nothing, since that text is out of d
 **Closing**: with results still to come (`unfinished_count()`, which leaves out
 removed items), `closeEvent` asks through `_confirm_close()`, defaulting to keep
 converting. The box follows `progress_changed` while open: the count stays current,
-and once nothing is left it ends and the window closes, unless a button was already
-clicked. Close anyway calls `cancel_unstarted()`, the `discard()` path. A
+and once nothing is left it ends, unless a button was already clicked. The window then
+closes only if every item the box was waiting on ended saved; otherwise it stays open
+on the first that did not. Close anyway calls `cancel_unstarted()`, the `discard()` path. A
 running worker cannot be interrupted, so after `app.exec()` `end_process()` in
 `main.py` syncs settings and, only if the pool still has an active thread, ends
 with `os._exit`, since a normal exit would wait for it and then raise

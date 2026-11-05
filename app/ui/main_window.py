@@ -841,7 +841,8 @@ class MainWindow(QMainWindow):
         box.setEscapeButton(keep)
 
         # Results keep arriving while it is open, since `exec` runs an event loop. Once
-        # the last one is in, the question has no subject and closing loses nothing.
+        # the last one is in, the question has no subject.
+        waiting_on = self.conversion_queue.unfinished_items()
         nothing_left = False
 
         def follow_queue(*_args) -> None:
@@ -858,9 +859,15 @@ class MainWindow(QMainWindow):
             box.exec()
         finally:
             self.conversion_queue.progress_changed.disconnect(follow_queue)
-        closing = nothing_left or box.clickedButton() is close_anyway
+        closing = box.clickedButton() is close_anyway
         box.deleteLater()
-        return closing
+        if not nothing_left:
+            return closing
+        # The person asked to close, but a result that was not saved would go with it.
+        unsaved = [item for item in waiting_on if item.display_state != DisplayState.SAVED]
+        if unsaved:
+            self._select_row(self.model.row_of(unsaved[0]))
+        return not unsaved
 
     @staticmethod
     def _close_busy_text(unfinished: int) -> str:
