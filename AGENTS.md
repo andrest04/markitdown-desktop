@@ -210,10 +210,10 @@ Qt's `styleHints().colorScheme()`: the app palette cannot answer, because
 
 - `ci.yml` — on every push/PR to `main`: `ruff check .`, `python -m
   compileall`, the headless smoke test above, and `python -m unittest discover
-  -s tests`, matrixed across windows-latest/macos-latest/ubuntu-latest. On
-  Linux, `tests/shutdown_refcount_probe.py` runs after the suite, even when it
-  fails, and cannot change the job's result: a temporary diagnostic for the
-  suite's abort at interpreter exit (`bool_dealloc`).
+  -s tests`, matrixed across windows-latest/macos-latest/ubuntu-latest.
+  PySide6 is held below 6.12 in `requirements.txt`: 6.12.0 loses a reference to
+  `True` on every `Signal.emit()`, which aborts on Linux with Python 3.11
+  (`tests/test_signal_refcount.py` measures it).
 - `assets/icon.*` — the app icon, drawn by `assets/make_icons.py` (needs
   Pillow, which the app does not); the window, both PyInstaller builds and
   `installer.iss` use it.
