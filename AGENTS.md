@@ -85,7 +85,10 @@ nothing test-related should be left in the user's actual Downloads folder.
   replaces the value, so workers never share a mutable object.
   `ConversionOptions.build_markitdown()` maps the
   GUI's option toggles to real `MarkItDown(...)` constructor kwargs
-  (`enable_plugins`, `docintel_endpoint`, `cu_endpoint`, `cu_analyzer_id`).
+  (`enable_plugins`, `docintel_endpoint`, `cu_endpoint`, `cu_analyzer_id`),
+  and always passes `requests_session` a `_TimeoutSession`, which applies
+  `URL_TIMEOUT` (connect, read) to requests that set none and repeats
+  markitdown's `Accept` header, set only on a session of its own.
   `convert_item()` raises `NoTextFound` on whitespace-only output, which
   markitdown does not, and maps per-item extension/mimetype/charset overrides to a
   `StreamInfo` object and calls `convert_local()` or `convert_uri()`
@@ -145,6 +148,13 @@ nothing test-related should be left in the user's actual Downloads folder.
     focus (`WidgetShortcut`), so a file drop hands the list focus unless
     someone is typing or a dialog is open, and removing rows selects the row
     now at the first removed position. `row_tooltip()` lives here too.
+  - `preview_browser.py` — `PreviewBrowser`, the rendered preview. Reads no
+    image or stylesheet that converted text names, only embedded `data:` images.
+    Links go through `_on_link_clicked()` (`setOpenLinks(False)`): fragments
+    scroll, absolute `http`, `https` and `mailto` open externally, and the rest
+    do nothing. No `MainWindow` reference. On a scaled screen Qt checks for
+    `name@2x.png` before `loadResource`, so `main.py` sets
+    `QT_HIGHDPI_DISABLE_2X_IMAGE_LOADING` before anything imports Qt.
   - `queue_text.py` — plain functions for the pane's words: `queue_summary()`,
     `detail_status()` and `word_count()`.
   - `status_mark.py` — `StatusMark` and `paint_status_glyph()`, one silhouette
@@ -190,6 +200,20 @@ anywhere persistent (see the `QueueTableModel` status-key note above).
 When adding a new user-facing string: add the key to **both** the `en`
 and `es` dicts in `app/i18n.py` — Spanish must stay neutral/professional
 (no voseo, no regional slang), not Rioplatense.
+
+**Retry**: `action_convert_selected()` (the Retry action and header button) only
+starts `_selected_retry_rows()`, and the action is enabled when that is not empty,
+while the other actions follow the first selected row. `_start_conversion()` does
+not filter: the row button, Enter and the context menu check their own row first.
+
+**Closing**: with results still to come (`unfinished_count()`, which leaves out
+removed items), `closeEvent` asks through `_confirm_close()`, defaulting to keep
+converting. Close anyway calls `cancel_unstarted()`, the `discard()` path. A
+running worker cannot be interrupted, so after `app.exec()` `end_process()` in
+`main.py` syncs settings and, only if the pool still has an active thread, ends
+with `os._exit`, since a normal exit would wait for it and then raise
+`Signal source has been deleted`. Tests closing a window with work in flight must
+patch `QMessageBox.exec`, or the real dialog blocks them.
 
 **Threading model**: conversions never block the UI thread. Each queue
 item gets its own `ConversionWorker` (`QRunnable`) submitted by

@@ -35,7 +35,6 @@ from PySide6.QtWidgets import (
     QStatusBar,
     QTableView,
     QTabWidget,
-    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
@@ -67,6 +66,7 @@ from app.ui.about_dialog import AboutDialog
 from app.ui.advanced_settings_dialog import AdvancedSettingsDialog
 from app.ui.brand_mark import BrandMark
 from app.ui.drop_zone import EMPTY_GUTTER, DropZone, center_column, empty_column_left
+from app.ui.preview_browser import PreviewBrowser
 from app.ui.queue_delegate import ROW_HEIGHT, QueueItemDelegate
 from app.ui.queue_text import detail_status, queue_summary
 from app.ui.status_mark import StatusMark
@@ -552,11 +552,10 @@ class MainWindow(QMainWindow):
 
         self.tabs = QTabWidget()
         self.tabs.tabBar().setFocusPolicy(Qt.FocusPolicy.TabFocus)
-        self.rendered_view = QTextBrowser()
-        self.rendered_view.setOpenExternalLinks(True)
+        self.rendered_view = PreviewBrowser()
         self.rendered_view.document().setDocumentMargin(PREVIEW_MARGIN)
         self.rendered_view.document().setIndentWidth(PREVIEW_MARGIN)
-        self.rendered_view.setLineWrapMode(QTextBrowser.LineWrapMode.FixedPixelWidth)
+        self.rendered_view.setLineWrapMode(PreviewBrowser.LineWrapMode.FixedPixelWidth)
         self.rendered_view.setLineWrapColumnOrWidth(READING_WIDTH)
         self.raw_view = QPlainTextEdit()
         self.raw_view.setPlaceholderText(tr("raw.placeholder"))
@@ -765,10 +764,31 @@ class MainWindow(QMainWindow):
         self.move(left, top)
 
     def closeEvent(self, event) -> None:
+        unfinished = self.conversion_queue.unfinished_count()
+        if unfinished and not self._confirm_close(unfinished):
+            event.ignore()
+            return
+        self.conversion_queue.cancel_unstarted()
         self.settings.setValue("window/geometry", self.saveGeometry())
         if not self._showing_empty:
             self._remember_working_size()
         super().closeEvent(event)
+
+    def _confirm_close(self, unfinished: int) -> bool:
+        """Closing loses these results, so keeping the window is the easy answer."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(tr("msgbox.close_busy.title"))
+        if unfinished == 1:
+            box.setText(tr("msgbox.close_busy.text.one"))
+        else:
+            box.setText(tr("msgbox.close_busy.text.other", count=unfinished))
+        keep = box.addButton(tr("msgbox.close_busy.keep"), QMessageBox.ButtonRole.RejectRole)
+        close_anyway = box.addButton(tr("msgbox.close_busy.close"), QMessageBox.ButtonRole.DestructiveRole)
+        box.setDefaultButton(keep)
+        box.setEscapeButton(keep)
+        box.exec()
+        return box.clickedButton() is close_anyway
 
     def _on_language_changed(self, language: str) -> None:
         self._sync_language_buttons()
@@ -922,11 +942,15 @@ class MainWindow(QMainWindow):
         self._refresh_preview()
 
     def action_convert_selected(self) -> None:
-        rows = sorted({idx.row() for idx in self.table_view.selectionModel().selectedRows()})
-        if not rows:
+        if not self.table_view.selectionModel().hasSelection():
             QMessageBox.information(self, tr("msgbox.no_selection.title"), tr("msgbox.no_selection.text"))
             return
-        self._start_conversion(rows)
+        self._start_conversion(self._selected_retry_rows())
+
+    def _selected_retry_rows(self) -> list[int]:
+        """Selected rows that need a retry. Converting a saved one would duplicate its file."""
+        rows = sorted({idx.row() for idx in self.table_view.selectionModel().selectedRows()})
+        return [row for row in rows if (item := self.model.item_at(row)) is not None and item.display_state in RETRY_STATES]
 
     def _start_conversion(self, rows: list[int]) -> None:
         if not rows:
@@ -938,6 +962,8 @@ class MainWindow(QMainWindow):
         row = self.model.row_of(item)
         if row >= 0 and self._selected_row() == row:
             self._refresh_preview()
+        else:
+            self._refresh_retry_action()
 
     def _on_item_started(self, item: QueueItem) -> None:
         self._refresh_preview_if_selected(item)
@@ -1069,8 +1095,12 @@ class MainWindow(QMainWindow):
         self.save_copy_action.setEnabled(result)
         self.open_file_action.setEnabled(saved)
         self.reveal_action.setEnabled(saved)
-        self.retry_action.setEnabled(state in RETRY_STATES)
+        self._refresh_retry_action()
         self.remove_action.setEnabled(item is not None)
+
+    def _refresh_retry_action(self) -> None:
+        """Unlike the other actions, Retry follows the whole selection."""
+        self.retry_action.setEnabled(bool(self._selected_retry_rows()))
 
     def _fit_preview_title(self) -> None:
         """Middle-elide the title so the extension survives a narrow pane."""

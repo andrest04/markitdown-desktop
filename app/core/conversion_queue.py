@@ -69,6 +69,14 @@ class ConversionQueue(QObject):
         self.progress_changed.emit(self._completed_count, self._total_count)
         return len(to_start)
 
+    def unfinished_count(self) -> int:
+        """Results still to come. A removed item's result has nowhere to go."""
+        return sum(self._model.row_of(item) >= 0 for item in self._in_flight)
+
+    def cancel_unstarted(self) -> None:
+        """Cancel every worker that has not started, for closing. See `discard`."""
+        self.discard(list(self._in_flight))
+
     def discard(self, items: list[QueueItem]) -> None:
         """Forget items just removed from the model.
 

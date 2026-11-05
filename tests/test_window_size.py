@@ -5,7 +5,7 @@ import unittest
 from unittest import mock
 
 from PySide6.QtCore import QRect, QSize, Qt
-from qt_support import FakeSettings, WindowTestCase, process_events
+from qt_support import FakeSettings, WindowTestCase, process_events, settle
 
 from app.ui.main_window import COMPACT_WINDOW_SIZE, WORKING_WINDOW_SIZE, MainWindow
 
@@ -94,6 +94,9 @@ class GrowingTests(WindowSizeTestCase):
         self.window.settings = saved
         self.add_sources("a.txt")
         self.window.resize(1000, 700)
+        # Closing with work in flight would ask first.
+        self.converter.release_all()
+        settle()
         self.window.close()
         with mock.patch("app.ui.main_window.QSettings", lambda *args: saved):
             window = MainWindow()

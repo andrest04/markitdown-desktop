@@ -8,7 +8,7 @@ from unittest import mock
 from PySide6.QtCore import QThreadPool
 from qt_support import WindowTestCase, pump_until, settle
 
-from app.core.queue_model import ItemStatus, QueueItem, SourceKind
+from app.core.queue_model import DisplayState, ItemStatus, QueueItem, SourceKind
 from app.i18n import tr
 
 
@@ -261,6 +261,108 @@ class DoubleDispatchTests(WindowTestCase):
 
         self.assertEqual(self.converter.call_count("a.txt"), 2)
         self.assertEqual(self.item_named("a.txt").error_message, "")
+
+
+class MixedSelectionRetryTests(WindowTestCase):
+    """Retry acts on the rows that need it, whatever else is selected."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.converter.failures["bad.txt"] = "boom"
+        self.add_sources("good.txt", "bad.txt")
+        self.converter.release_all()
+        settle()
+        self.converter.hold_all()
+        self.good, self.bad = self.item_named("good.txt"), self.item_named("bad.txt")
+        self.assertEqual(self.good.display_state, DisplayState.SAVED)
+        self.assertEqual(self.bad.display_state, DisplayState.ERROR)
+        del self.converter.failures["bad.txt"]
+
+    def test_a_saved_row_in_the_selection_is_not_converted_again(self):
+        self.window.table_view.selectAll()
+
+        self.window.action_convert_selected()
+        self.converter.release_all()
+        settle()
+
+        self.assertEqual(self.converter.call_count("good.txt"), 1)
+        self.assertEqual(self.converter.call_count("bad.txt"), 2)
+        self.assertEqual(self.downloaded_names(), ["bad.md", "good.md"])
+        self.assertEqual(self.bad.display_state, DisplayState.SAVED)
+
+    def test_selecting_only_saved_rows_converts_nothing(self):
+        self.window.table_view.selectRow(0)
+
+        self.window.action_convert_selected()
+        self.converter.release_all()
+        settle()
+
+        self.assertEqual(self.converter.call_count("good.txt"), 1)
+        self.assertEqual(self.downloaded_names(), ["good.md"])
+
+    def test_retry_is_enabled_when_any_selected_row_can_be_retried(self):
+        self.window.table_view.selectAll()
+        self.assertEqual(self.window._selected_row(), 0, "the row the header describes is the saved one")
+        self.assertTrue(self.window.retry_action.isEnabled())
+
+    def test_retry_is_off_when_no_selected_row_can_be_retried(self):
+        self.window.table_view.selectRow(0)
+        self.assertFalse(self.window.retry_action.isEnabled())
+
+    def test_retry_is_off_with_nothing_selected(self):
+        self.window.table_view.clearSelection()
+        self.assertFalse(self.window.retry_action.isEnabled())
+
+    def test_a_row_that_failed_saving_can_be_retried_too(self):
+        self.window.table_view.selectRow(0)
+        self.good.mark_save_failed("disk full")
+        self.window._refresh_preview()
+        self.assertTrue(self.window.retry_action.isEnabled())
+
+    def test_retry_turns_off_once_the_last_failed_row_is_converting(self):
+        self.window.table_view.selectAll()
+
+        self.window.action_convert_selected()
+
+        self.assertTrue(pump_until(lambda: self.bad.status == ItemStatus.CONVERTING))
+        self.assertFalse(self.window.retry_action.isEnabled())
+
+    def test_retry_turns_on_when_a_row_past_the_first_fails(self):
+        self.window.table_view.selectAll()
+        self.converter.failures["bad.txt"] = "boom again"
+        self.window.action_convert_selected()
+        self.assertTrue(pump_until(lambda: self.bad.status == ItemStatus.CONVERTING))
+
+        self.converter.release_all()
+        settle()
+
+        self.assertEqual(self.bad.display_state, DisplayState.ERROR)
+        self.assertTrue(self.window.retry_action.isEnabled())
+
+    def test_no_selection_still_says_so(self):
+        self.window.table_view.clearSelection()
+        with mock.patch("app.ui.main_window.QMessageBox.information") as information:
+            self.window.action_convert_selected()
+        information.assert_called_once()
+
+    def test_new_rows_still_start_on_their_own_with_a_saved_row_selected(self):
+        self.window.table_view.selectRow(0)
+        self.add_sources("new.txt")
+        self.wait_started(3)
+        self.assertEqual(self.converter.call_count("new.txt"), 1)
+
+    def test_the_row_retry_and_enter_still_retry_their_own_row_only(self):
+        self.window.table_view.selectAll()
+        self.window.table_view.setCurrentIndex(self.window.model.index(1, 0))
+        self.window.table_view.selectAll()
+
+        self.assertTrue(self.window._retry_focused_row())
+        self.window.queue_delegate.retry_requested.emit(1)
+        self.converter.release_all()
+        settle()
+
+        self.assertEqual(self.converter.call_count("good.txt"), 1)
+        self.assertEqual(self.converter.call_count("bad.txt"), 2)
 
 
 if __name__ == "__main__":

@@ -7,10 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Closing the window with conversions unfinished now asks first, with the count.
+  Keep converting is the default and loses nothing. Close anyway cancels what has
+  not started and ends the app without waiting for what is running.
+
 ### Fixed
 
+- Closing during a conversion silently lost the result, and the app kept running
+  without a window until the conversion ended.
 - On Linux with Python 3.11, the app could abort after about 20 conversions in
   one session. PySide6 is now held below 6.12.
+- Clicking a relative or `file:` link in the preview blanked it or replaced it
+  with that local file. Links inside the text still scroll, web and mail links
+  still open outside the app, and anything else now does nothing.
+- A link whose server accepts the connection and never answers kept its item
+  converting forever. It now fails as a connection problem after 10 seconds to
+  connect or 60 seconds without data. Large downloads with steady data are not
+  cut off.
+- Retry on a selection mixing failed and saved rows converted the saved ones
+  again, leaving a duplicate such as `good (1).md`. Only rows that need it are
+  retried now, and Retry is available when any selected row needs it.
+- The preview no longer reads local files or network shares for images and
+  stylesheets that converted text points at. Images embedded in the text still
+  show.
 
 ## [1.4.0] - 2026-11-02
 

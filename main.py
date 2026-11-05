@@ -19,8 +19,20 @@ def _configure_qt_fonts() -> None:
         os.environ["QT_QPA_FONTDIR"] = candidate
 
 
-_configure_qt_fonts()
+def _disable_qt_2x_image_lookup() -> None:
+    """Keep Qt from checking for `name@2x.png` on any image it is asked to show.
 
+    On a scaled screen Qt does that before the preview can refuse the image, so a
+    share named in converted text freezes the window while the network answers.
+    The app ships no raster 2x images, and Qt reads this once, so it goes first.
+    """
+    os.environ["QT_HIGHDPI_DISABLE_2X_IMAGE_LOADING"] = "1"
+
+
+_configure_qt_fonts()
+_disable_qt_2x_image_lookup()
+
+from PySide6.QtCore import QThreadPool
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
@@ -51,6 +63,20 @@ def set_windows_app_id() -> None:
         pass  # Only the taskbar grouping is lost; the window keeps its icon.
 
 
+def end_process(exit_code: int, settings) -> int:
+    """Flush settings, and do not wait for a conversion still running.
+
+    markitdown blocks, so a running worker cannot be interrupted. A normal exit
+    would keep the process alive, with no window, until the worker returned, which
+    then raises because the signals it emits through are gone. `os._exit` skips all
+    of that: nothing is half written, since saves only happen on the GUI thread.
+    """
+    settings.sync()
+    if QThreadPool.globalInstance().activeThreadCount():
+        os._exit(exit_code)
+    return exit_code
+
+
 def main() -> int:
     set_windows_app_id()
     app = QApplication(sys.argv)
@@ -61,7 +87,7 @@ def main() -> int:
     window = MainWindow()
     window.show()
 
-    return app.exec()
+    return end_process(app.exec(), window.settings)
 
 
 if __name__ == "__main__":
