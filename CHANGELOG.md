@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-11-05
+
 ### Changed
 
 - The Preview tab renders the first 50,000 characters of a very long result, cut
@@ -218,7 +220,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "open containing folder" dispatches to `explorer`/`open -R`/`xdg-open`
   per OS.
 
-[Unreleased]: https://github.com/andrest04/markitdown-desktop/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/andrest04/markitdown-desktop/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/andrest04/markitdown-desktop/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/andrest04/markitdown-desktop/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/andrest04/markitdown-desktop/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/andrest04/markitdown-desktop/compare/v1.2.0...v1.3.0
