@@ -96,7 +96,9 @@ nothing test-related should be left in the user's actual Downloads folder.
   / `unique_download_path()` implement the Downloads auto-save contract
   (collision-safe numeric suffixing, `Path.home()`-based so it's portable
   across accounts/OSes). `export_markdown()` is the collision-safe bulk
-  export; it collects `OSError`s in its result instead of raising.
+  export; it collects `OSError`s in its result instead of raising. Both write through
+  `_write_new_file()`, and Save a copy through `save_copy()`: a failed write leaves no
+  new file, and a file that was there is never removed.
   `classify_paths()` sorts dropped/browsed paths for queueing.
   `classify_conversion_error()` and `classify_save_error()` sort failures into
   a `FailureReason`, by exception type and by errno, since library text cannot

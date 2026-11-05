@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After an edit in the Markdown tab, the header's word count described the edit
   while naming the saved file, which edits do not change. It now counts what the
   file holds.
+- A save that failed on a full disk left an empty file behind, so every Retry added
+  another and the success landed on a later name. A failed save, export or copy no
+  longer leaves a new file, and a file that was already there is never removed.
 - Retry after a failed save converted the file again, so it failed if the source
   had gone in the meantime, and the text was out of reach. It now saves the text
   already in memory, including edits made since. Text that never reached a file

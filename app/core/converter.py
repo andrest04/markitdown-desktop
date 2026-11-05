@@ -32,6 +32,7 @@ markitdown/converters/_markdownify.py).
 """
 from __future__ import annotations
 
+import contextlib
 import errno
 import os
 import re
@@ -135,13 +136,46 @@ def unique_download_path(directory: Path, base_name: str) -> Path:
     return candidate
 
 
+def _write_new_file(path: Path, text: str) -> None:
+    """Write a file that must not exist yet, leaving nothing behind if that fails.
+
+    A full disk takes the name and refuses the bytes, so without this every retry
+    would leave an empty file and push the next one's name along. Creating it first
+    is what makes removing it safe: if the name was taken by then, this raises here.
+    """
+    path.touch(exist_ok=False)
+    try:
+        path.write_text(text, encoding="utf-8")
+    except Exception:
+        with contextlib.suppress(OSError):
+            path.unlink()
+        raise
+
+
+def save_copy(path: str | Path, text: str) -> None:
+    """Write where the person chose, replacing a file they agreed to replace.
+
+    One created here goes again if the write fails. One that was there stays,
+    whatever the failed write left in it.
+    """
+    existed = os.path.exists(path)
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+    except Exception:
+        if not existed:
+            with contextlib.suppress(OSError):
+                os.unlink(path)
+        raise
+
+
 def auto_save_markdown(item: QueueItem, markdown_text: str, downloads_dir: Path | None = None) -> Path:
     """Write `markdown_text` to the Downloads folder using a name derived from
     the item's source, avoiding collisions. Returns the path written to."""
     directory = downloads_dir if downloads_dir is not None else get_downloads_dir()
     base_name = sanitize_filename(default_basename(item))
     path = unique_download_path(directory, base_name)
-    path.write_text(markdown_text, encoding="utf-8")
+    _write_new_file(path, markdown_text)
     return path
 
 
@@ -171,7 +205,7 @@ def export_markdown(items: list[QueueItem], folder: str | Path) -> ExportResult:
     for item in items:
         try:
             path = unique_download_path(directory, sanitize_filename(default_basename(item)))
-            path.write_text(item.markdown_result or "", encoding="utf-8")
+            _write_new_file(path, item.markdown_result or "")
         except OSError as exc:
             result.failures.append(ExportFailure(item, classify_save_error(exc), str(exc)))
         else:

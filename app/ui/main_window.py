@@ -56,6 +56,7 @@ from app.core.converter import (
     default_basename,
     export_markdown,
     get_downloads_dir,
+    save_copy,
     supported_name_filter,
 )
 from app.core.queue_model import (
@@ -1371,8 +1372,7 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(self, tr("dialog.save_copy_as"), default_name, tr("filter.markdown"))
         if path:
             try:
-                with open(path, "w", encoding="utf-8") as fh:
-                    fh.write(item.markdown_result)
+                save_copy(path, item.markdown_result)
             except OSError as exc:
                 QMessageBox.warning(
                     self,
