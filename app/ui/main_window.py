@@ -811,16 +811,39 @@ class MainWindow(QMainWindow):
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning)
         box.setWindowTitle(tr("msgbox.close_busy.title"))
-        if unfinished == 1:
-            box.setText(tr("msgbox.close_busy.text.one"))
-        else:
-            box.setText(tr("msgbox.close_busy.text.other", count=unfinished))
+        box.setText(self._close_busy_text(unfinished))
         keep = box.addButton(tr("msgbox.close_busy.keep"), QMessageBox.ButtonRole.RejectRole)
         close_anyway = box.addButton(tr("msgbox.close_busy.close"), QMessageBox.ButtonRole.DestructiveRole)
         box.setDefaultButton(keep)
         box.setEscapeButton(keep)
-        box.exec()
-        return box.clickedButton() is close_anyway
+
+        # Results keep arriving while it is open, since `exec` runs an event loop. Once
+        # the last one is in, the question has no subject and closing loses nothing.
+        nothing_left = False
+
+        def follow_queue(*_args) -> None:
+            nonlocal nothing_left
+            remaining = self.conversion_queue.unfinished_count()
+            if remaining:
+                box.setText(self._close_busy_text(remaining))
+            elif box.clickedButton() is None:
+                nothing_left = True
+                box.done(0)
+
+        self.conversion_queue.progress_changed.connect(follow_queue)
+        try:
+            box.exec()
+        finally:
+            self.conversion_queue.progress_changed.disconnect(follow_queue)
+        closing = nothing_left or box.clickedButton() is close_anyway
+        box.deleteLater()
+        return closing
+
+    @staticmethod
+    def _close_busy_text(unfinished: int) -> str:
+        if unfinished == 1:
+            return tr("msgbox.close_busy.text.one")
+        return tr("msgbox.close_busy.text.other", count=unfinished)
 
     def _on_language_changed(self, language: str) -> None:
         self._sync_language_buttons()

@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A very long result froze the window, for about 24 seconds with a 50,000-row
   table, each time it was shown and on every keystroke in the Markdown tab. The
   preview now also waits for a pause in typing.
+- If the conversions finished while the closing question was open, it still said
+  results would be lost, and Keep converting meant closing a second time. The window
+  now closes on its own once nothing is left, and the count stays current until then.
 - With a saved row first and a failed row also selected, Retry was in the menu but
   not in the header. The header now has it whenever the menu does.
 - Adding a folder already in the list said none of its files could be converted,
