@@ -45,7 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   converted, so a wrong encoding could not be corrected without losing the hint.
   Accepting changed hints now converts it again at once. The earlier file stays,
   and the new one takes a numeric suffix. Unchanged hints and other settings
-  convert nothing.
+  convert nothing. If the Markdown tab holds edits that are in no file, it asks
+  first, and declining keeps the edits and the hints.
 
 ## [1.4.1] - 2026-11-05
 

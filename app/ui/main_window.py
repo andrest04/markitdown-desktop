@@ -1420,5 +1420,26 @@ class MainWindow(QMainWindow):
             self.conversion_options = dialog.selected_options()
             # A finished item would otherwise keep the text made without them, since
             # Retry leaves it alone. A file already saved stays: the new one gets a suffix.
-            if dialog.apply_item_overrides() and target_item.status == ItemStatus.DONE:
+            if (
+                dialog.apply_item_overrides()
+                and target_item.status == ItemStatus.DONE
+                and self._may_replace_text(target_item)
+            ):
                 self.conversion_queue.enqueue([target_item], self.conversion_options)
+
+    def _may_replace_text(self, item: QueueItem) -> bool:
+        """Converting replaces the item's text, so edits no file holds are asked about."""
+        if not item.has_unsaved_edits:
+            return True
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(tr("msgbox.replace_edits.title"))
+        box.setText(tr("msgbox.replace_edits.text"))
+        keep = box.addButton(tr("msgbox.replace_edits.keep"), QMessageBox.ButtonRole.RejectRole)
+        convert = box.addButton(tr("msgbox.replace_edits.convert"), QMessageBox.ButtonRole.DestructiveRole)
+        box.setDefaultButton(keep)
+        box.setEscapeButton(keep)
+        box.exec()
+        replacing = box.clickedButton() is convert
+        box.deleteLater()
+        return replacing
