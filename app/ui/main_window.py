@@ -13,8 +13,10 @@ from PySide6.QtGui import (
     QAction,
     QDesktopServices,
     QGuiApplication,
+    QImage,
     QKeySequence,
     QShortcut,
+    QTextDocument,
 )
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -158,6 +160,26 @@ def detect_system_theme(fallback: str = "light") -> str:
     if scheme == Qt.ColorScheme.Light:
         return "light"
     return fallback
+
+
+class _PreviewBrowser(QTextBrowser):
+    """Shows converted text without reading anything that text points at.
+
+    Converted text comes from other people's files and pages. Left alone, Qt
+    opens whatever an image or stylesheet names, local files and network shares
+    included. Only an image embedded in the text itself still shows. The blank
+    image has to be a real one: for an empty answer Qt reads the file on its own.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._blank_image = QImage(1, 1, QImage.Format.Format_ARGB32)
+        self._blank_image.fill(0)
+
+    def loadResource(self, kind, name):
+        if name.scheme() == "data":
+            return super().loadResource(kind, name)
+        return self._blank_image if kind == QTextDocument.ResourceType.ImageResource else ""
 
 
 class MainWindow(QMainWindow):
@@ -552,8 +574,10 @@ class MainWindow(QMainWindow):
 
         self.tabs = QTabWidget()
         self.tabs.tabBar().setFocusPolicy(Qt.FocusPolicy.TabFocus)
-        self.rendered_view = QTextBrowser()
-        self.rendered_view.setOpenExternalLinks(True)
+        self.rendered_view = _PreviewBrowser()
+        # By itself QTextBrowser loads relative and `file:` links into the view.
+        self.rendered_view.setOpenLinks(False)
+        self.rendered_view.anchorClicked.connect(self._on_preview_link_clicked)
         self.rendered_view.document().setDocumentMargin(PREVIEW_MARGIN)
         self.rendered_view.document().setIndentWidth(PREVIEW_MARGIN)
         self.rendered_view.setLineWrapMode(QTextBrowser.LineWrapMode.FixedPixelWidth)
@@ -1170,6 +1194,13 @@ class MainWindow(QMainWindow):
         self._preview_full_width = needs_full_width(html)
         self._fit_reading_width()
         self.rendered_view.setHtml(preview_html(html, self._current_theme_name()))
+
+    def _on_preview_link_clicked(self, url: QUrl) -> None:
+        """A link scrolls or leaves for a browser. Anything else does nothing."""
+        if url.isRelative() and url.hasFragment() and not url.path() and not url.hasQuery():
+            self.rendered_view.scrollToAnchor(url.fragment())
+        elif url.scheme() == "mailto" or (url.scheme() in ("http", "https") and url.host()):
+            QDesktopServices.openUrl(url)
 
     def _fit_reading_width(self) -> None:
         width = self.rendered_view.viewport().width()

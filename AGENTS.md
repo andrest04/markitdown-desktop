@@ -127,7 +127,11 @@ nothing test-related should be left in the user's actual Downloads folder.
   - `main_window.py` — `MainWindow`, the main window/queue/menu logic.
     Holds one `ConversionOptions` value, starts work through
     `ConversionQueue` and reacts to its signals to update the UI. Imports
-    the widgets below rather than defining them.
+    the widgets below rather than defining them; the exception is the small
+    `_PreviewBrowser`, which reads no image or stylesheet that converted text
+    names, only embedded `data:` images. Preview links go through
+    `_on_preview_link_clicked` (`setOpenLinks(False)`): fragments scroll,
+    absolute `http`, `https` and `mailto` open externally, the rest do nothing.
   - `drop_zone.py` — `DropZone` (no box: the empty-window instruction with
     add buttons and the link field, reduced to just the link row once items
     exist, via `set_prominent()`). No `MainWindow` reference — takes plain

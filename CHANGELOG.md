@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - On Linux with Python 3.11, the app could abort after about 20 conversions in
   one session. PySide6 is now held below 6.12.
+- Clicking a relative or `file:` link in the preview blanked it or replaced it
+  with that local file. Links inside the text still scroll, web and mail links
+  still open outside the app, and anything else now does nothing.
+- The preview no longer reads local files or network shares for images and
+  stylesheets that converted text points at. Images embedded in the text still
+  show.
 
 ## [1.4.0] - 2026-11-02
 
