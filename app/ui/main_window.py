@@ -110,10 +110,26 @@ _BRAND_MARGINS_FILLED = (12, 14, 14, 10)
 # Fits a headline and a detail line, so rows never shift when one goes away.
 _SUMMARY_HEIGHT = 46
 
+# Characters of Markdown the preview renders. Measured on a narrow table, the worst
+# case found: 50,000 characters take about 0.5 s, 100,000 about 2 s and the whole
+# 739 KB of a 50,000-row table about 24 s, since the cost grows faster than the size.
+# The same amount of prose takes 0.02 s.
+PREVIEW_CHAR_LIMIT = 50_000
+# Long enough to span the gap between keystrokes, short enough to feel live.
+_RENDER_DEBOUNCE_MS = 200
+
 
 def _save_failure_text(reason: FailureReason, detail: str) -> str:
     """For a message box, which has room for the system's words after the reason."""
     return f"{tr(reason.value)} ({detail})"
+
+
+def preview_excerpt(text: str) -> str:
+    """As much of `text` as the preview renders, ending at a line boundary if it has one."""
+    if len(text) <= PREVIEW_CHAR_LIMIT:
+        return text
+    line_end = text.rfind("\n", 0, PREVIEW_CHAR_LIMIT)
+    return text[: line_end + 1] if line_end >= 0 else text[:PREVIEW_CHAR_LIMIT]
 
 
 def reveal_command(path: str) -> str | list[str]:
@@ -197,6 +213,10 @@ class MainWindow(QMainWindow):
         self._copy_feedback.setSingleShot(True)
         self._copy_feedback.setInterval(_COPY_FEEDBACK_MS)
         self._copy_feedback.timeout.connect(self._restore_copy_label)
+        self._render_timer = QTimer(self)
+        self._render_timer.setSingleShot(True)
+        self._render_timer.setInterval(_RENDER_DEBOUNCE_MS)
+        self._render_timer.timeout.connect(self._on_raw_edit_settled)
 
         self._build_ui()
         self._build_menu()
@@ -1199,19 +1219,30 @@ class MainWindow(QMainWindow):
         self.preview_body.setVisible(True)
 
     def _on_raw_text_changed(self) -> None:
-        text = self.raw_view.toPlainText()
-        row = self._selected_row()
-        item = self.model.item_at(row)
+        """The item takes every keystroke; the costly part waits for a pause."""
+        item = self.model.item_at(self._selected_row())
         if item is not None:
-            item.markdown_result = text
+            item.markdown_result = self.raw_view.toPlainText()
+        self._render_timer.start()
+
+    def _on_raw_edit_settled(self) -> None:
+        item = self.model.item_at(self._selected_row())
+        if item is not None:
             self._update_preview_header(item)
-        self._render_markdown(text)
+        self._render_markdown(self.raw_view.toPlainText())
 
     def _render_markdown(self, text: str) -> None:
-        html = markdown_lib.markdown(text, extensions=["extra", "sane_lists", "tables"]) if text else ""
+        self._render_timer.stop()
+        excerpt = preview_excerpt(text)
+        html = markdown_lib.markdown(excerpt, extensions=["extra", "sane_lists", "tables"]) if excerpt else ""
         self._preview_full_width = needs_full_width(html)
         self._fit_reading_width()
-        self.rendered_view.setHtml(preview_html(html, self._current_theme_name()))
+        notice = self._truncation_notice() if len(excerpt) < len(text) else ""
+        self.rendered_view.setHtml(preview_html(html, self._current_theme_name(), notice))
+
+    def _truncation_notice(self) -> str:
+        saved = self._preview_item is not None and self._preview_item.display_state == DisplayState.SAVED
+        return tr("preview.truncated" if saved else "preview.truncated_unsaved")
 
     def _fit_reading_width(self) -> None:
         width = self.rendered_view.viewport().width()

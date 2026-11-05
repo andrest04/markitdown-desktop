@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import unittest
 
-from qt_support import WindowTestCase, process_events
+from qt_support import WindowTestCase, process_events, pump_until
 
 from app.core.queue_model import ItemStatus, QueueItem, SourceKind
 from app.i18n import LANG_EN, LANG_ES, tr
@@ -155,8 +155,7 @@ class WindowDetailTests(WindowTestCase):
     def test_editing_the_markdown_updates_the_size(self):
         self.select(make_item(saved="/x/report.md", result="one two"))
         self.window.raw_view.setPlainText("one two three")
-        process_events()
-        self.assertTrue(self.window.preview_header_status.text().endswith("3 words"))
+        self.assertTrue(pump_until(lambda: self.window.preview_header_status.text().endswith("3 words")))
 
     def test_selecting_an_item_does_not_write_back_through_the_guard(self):
         item = make_item(saved="/x/report.md", result="one two")

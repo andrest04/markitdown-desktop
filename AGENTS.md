@@ -152,7 +152,11 @@ nothing test-related should be left in the user's actual Downloads folder.
     image or stylesheet that converted text names, only embedded `data:` images.
     Links go through `_on_link_clicked()` (`setOpenLinks(False)`): fragments
     scroll, absolute `http`, `https` and `mailto` open externally, and the rest
-    do nothing. No `MainWindow` reference. On a scaled screen Qt checks for
+    do nothing. No `MainWindow` reference. `_render_markdown()` in `main_window.py`
+    renders only `preview_excerpt()`, up to `PREVIEW_CHAR_LIMIT` and cut at a line,
+    with a notice through `preview_html()`, and typing in the Markdown tab reaches
+    it through a single-shot timer. The item takes every keystroke at once, so
+    nothing waits on that timer to be kept. On a scaled screen Qt checks for
     `name@2x.png` before `loadResource`, so `main.py` sets
     `QT_HIGHDPI_DISABLE_2X_IMAGE_LOADING` before anything imports Qt.
   - `queue_text.py` — plain functions for the pane's words: `queue_summary()`,

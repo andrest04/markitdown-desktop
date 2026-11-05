@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Preview tab renders the first 50,000 characters of a very long result, cut
+  at a line, and says so above the text. The Markdown tab and the saved file stay
+  complete.
+
 ### Fixed
 
+- A very long result froze the window, for about 24 seconds with a 50,000-row
+  table, each time it was shown and on every keystroke in the Markdown tab. The
+  preview now also waits for a pause in typing.
 - Changing the hints in Advanced settings had no effect on a file already
   converted, so a wrong encoding could not be corrected without losing the hint.
   Accepting changed hints now converts it again at once. The earlier file stays,
