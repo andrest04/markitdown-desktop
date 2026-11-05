@@ -163,8 +163,10 @@ nothing test-related should be left in the user's actual Downloads folder.
   - `advanced_settings_dialog.py` — `AdvancedSettingsDialog`, the
     secondary settings panel opened from Edit > Advanced settings. Takes
     the current options and target item; on accept the caller reads
-    `selected_options()` and calls `apply_item_overrides()`. No `MainWindow`
-    reference.
+    `selected_options()` and calls `apply_item_overrides()`, which returns whether
+    the hints changed. Changed hints on an item with status `DONE` convert it again
+    through `enqueue()`; the in-flight guard covers one already dispatched, and a
+    failed item waits for Retry. No `MainWindow` reference.
   - `about_dialog.py` — `AboutDialog`. Reads the markitdown package
     version via `app.core.converter.get_markitdown_version()` rather
     than importing `markitdown` itself — `converter.py` is the only file

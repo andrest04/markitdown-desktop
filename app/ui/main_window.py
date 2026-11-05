@@ -1303,4 +1303,7 @@ class MainWindow(QMainWindow):
         dialog = AdvancedSettingsDialog(self.conversion_options, target_item, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.conversion_options = dialog.selected_options()
-            dialog.apply_item_overrides()
+            # A finished item would otherwise keep the text made without them, since
+            # Retry leaves it alone. A file already saved stays: the new one gets a suffix.
+            if dialog.apply_item_overrides() and target_item.status == ItemStatus.DONE:
+                self.conversion_queue.enqueue([target_item], self.conversion_options)

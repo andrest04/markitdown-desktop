@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Changing the hints in Advanced settings had no effect on a file already
+  converted, so a wrong encoding could not be corrected without losing the hint.
+  Accepting changed hints now converts it again at once. The earlier file stays,
+  and the new one takes a numeric suffix. Unchanged hints and other settings
+  convert nothing.
+
 ## [1.4.1] - 2026-11-05
 
 ### Changed
