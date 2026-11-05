@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-04
+
 ### Changed
 
 - Closing the window with conversions unfinished now asks first, with the count.
@@ -18,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Closing during a conversion silently lost the result, and the app kept running
   without a window until the conversion ended.
 - On Linux with Python 3.11, the app could abort after about 20 conversions in
-  one session. PySide6 is now held below 6.12.
+  one session (`bool_dealloc`, the known issue listed under 1.4.0). PySide6 is
+  now held below 6.12.
 - Clicking a relative or `file:` link in the preview blanked it or replaced it
   with that local file. Links inside the text still scroll, web and mail links
   still open outside the app, and anything else now does nothing.
@@ -165,7 +168,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "open containing folder" dispatches to `explorer`/`open -R`/`xdg-open`
   per OS.
 
-[Unreleased]: https://github.com/andrest04/markitdown-desktop/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/andrest04/markitdown-desktop/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/andrest04/markitdown-desktop/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/andrest04/markitdown-desktop/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/andrest04/markitdown-desktop/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/andrest04/markitdown-desktop/compare/v1.1.0...v1.2.0
