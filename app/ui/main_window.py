@@ -203,6 +203,7 @@ class MainWindow(QMainWindow):
         # and clip the action row in longer languages or larger fonts.
         self.setMinimumHeight(COMPACT_WINDOW_SIZE[1])
         self._showing_empty = True
+        self._closing = False
 
         self._preview_item: QueueItem | None = None
         self._preview_full_width = False
@@ -218,6 +219,7 @@ class MainWindow(QMainWindow):
         self.conversion_queue.item_saved.connect(self._on_item_saved)
         self.conversion_queue.item_save_failed.connect(self._on_item_save_failed)
         self.conversion_queue.batch_started.connect(self._on_batch_started)
+        self.conversion_queue.conversion_again_due.connect(self._on_conversion_again_due)
         self.conversion_queue.progress_changed.connect(self._on_progress_changed)
         self.conversion_queue.batch_finished.connect(self._on_batch_finished)
 
@@ -815,6 +817,7 @@ class MainWindow(QMainWindow):
         if unfinished and not self._confirm_close(unfinished):
             event.ignore()
             return
+        self._closing = True
         self.conversion_queue.cancel_unstarted()
         self.settings.setValue("window/geometry", self.saveGeometry())
         if not self._showing_empty:
@@ -1422,10 +1425,19 @@ class MainWindow(QMainWindow):
             # Retry leaves it alone. A file already saved stays: the new one gets a suffix.
             if (
                 dialog.apply_item_overrides()
+                and not self.conversion_queue.hints_changed(target_item)
                 and target_item.status == ItemStatus.DONE
                 and self._may_replace_text(target_item)
             ):
                 self.conversion_queue.enqueue([target_item], self.conversion_options)
+
+    def _on_conversion_again_due(self, item: QueueItem) -> None:
+        # On the next turn of the event loop: the queue is mid-report, and this may ask.
+        QTimer.singleShot(0, lambda: self._convert_again(item))
+
+    def _convert_again(self, item: QueueItem) -> None:
+        if not self._closing and self.model.row_of(item) >= 0 and self._may_replace_text(item):
+            self.conversion_queue.enqueue([item], self.conversion_options)
 
     def _may_replace_text(self, item: QueueItem) -> bool:
         """Converting replaces the item's text, so edits no file holds are asked about."""

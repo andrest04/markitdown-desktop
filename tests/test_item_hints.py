@@ -130,32 +130,6 @@ class HintsOnASavedItemTests(HintTestCase):
 
 
 class HintsOnOtherStatesTests(HintTestCase):
-    def test_hints_on_an_item_being_converted_are_kept_without_a_second_worker(self):
-        self.add_sources("a.txt")
-        self.wait_started(1)
-        self.assertTrue(pump_until(lambda: self.item_named("a.txt").status == ItemStatus.CONVERTING))
-
-        self.accept_dialog(self.set_charset("cp1252"))
-
-        self.assertEqual(self.item_named("a.txt").charset_override, "cp1252")
-        self.converter.release_all()
-        settle()
-        self.assertEqual(self.converter.call_count("a.txt"), 1)
-        self.assertEqual(self.downloaded_names(), ["a.md"])
-
-    def test_changing_hints_again_while_converting_again_does_not_double_convert(self):
-        item = self.saved_item()
-        self.accept_dialog(self.set_charset("cp1252"))
-        self.assertTrue(pump_until(lambda: self.converter.call_count("a.txt") == 2))
-
-        self.accept_dialog(self.set_charset("cp850"))
-
-        self.assertEqual(item.charset_override, "cp850")
-        self.converter.release_all()
-        settle()
-        self.assertEqual(self.converter.call_count("a.txt"), 2)
-        self.assertEqual(self.downloaded_names(), ["a (1).md", "a.md"])
-
     def test_a_failed_item_keeps_waiting_for_retry(self):
         self.converter.failures["a.txt"] = "boom"
         self.add_sources("a.txt")

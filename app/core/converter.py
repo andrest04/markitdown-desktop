@@ -485,6 +485,11 @@ class ConversionWorker(QRunnable):
         self._start_lock = threading.Lock()
         self._started = False
 
+    @property
+    def has_started(self) -> bool:
+        """Set by the worker itself, ahead of the queued `started` signal."""
+        return self._started
+
     def take_from(self, pool: QThreadPool) -> bool:
         """Pull this worker out of `pool` if it has not started; True if it did.
 

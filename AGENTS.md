@@ -179,9 +179,11 @@ nothing test-related should be left in the user's actual Downloads folder.
     the current options and target item; on accept the caller reads
     `selected_options()` and calls `apply_item_overrides()`, which returns whether
     the hints changed. Changed hints on an item with status `DONE` convert it again
-    through `enqueue()`, after `_may_replace_text()` asks if `has_unsaved_edits`; the
-    in-flight guard covers one already dispatched, and a failed item waits for Retry.
-    No `MainWindow` reference.
+    through `enqueue()`, after `_may_replace_text()` asks if `has_unsaved_edits`, and a
+    failed item waits for Retry. `ConversionQueue.hints_changed()` handles an item with
+    a worker: one not started reads the new hints itself, and a running one is followed
+    by `conversion_again_due`, then one more conversion by the same rule, never at the
+    same time. No `MainWindow` reference.
   - `about_dialog.py` — `AboutDialog`. Reads the markitdown package
     version via `app.core.converter.get_markitdown_version()` rather
     than importing `markitdown` itself — `converter.py` is the only file
