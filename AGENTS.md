@@ -198,6 +198,11 @@ When adding a new user-facing string: add the key to **both** the `en`
 and `es` dicts in `app/i18n.py` — Spanish must stay neutral/professional
 (no voseo, no regional slang), not Rioplatense.
 
+**Retry**: `action_convert_selected()` (the Retry action and header button) only
+starts `_selected_retry_rows()`, and the action is enabled when that is not empty,
+while the other actions follow the first selected row. `_start_conversion()` does
+not filter: the row button, Enter and the context menu check their own row first.
+
 **Closing**: with results still to come (`unfinished_count()`, which leaves out
 removed items), `closeEvent` asks through `_confirm_close()`, defaulting to keep
 converting. Close anyway calls `cancel_unstarted()`, the `discard()` path. A

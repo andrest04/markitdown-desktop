@@ -129,7 +129,7 @@ class FailedRetryTests(WindowTestCase):
 
         self.converter.failures["a.txt"] = "boom"
         self.window.table_view.selectRow(0)
-        self.window.action_convert_selected()
+        self.window._start_conversion([0])
         self.converter.release("a.txt")
         self.assertTrue(pump_until(lambda: item.status == ItemStatus.ERROR))
         settle()
@@ -161,7 +161,7 @@ class StaleResultTests(WindowTestCase):
         item = self.item_named("a.txt")
         self.converter.failures["a.txt"] = "boom"
         self.window.table_view.selectRow(0)
-        self.window.action_convert_selected()
+        self.window._start_conversion([0])
         self.converter.release("a.txt")
         self.assertTrue(pump_until(lambda: item.status == ItemStatus.ERROR))
         settle()

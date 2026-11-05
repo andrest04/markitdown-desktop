@@ -967,11 +967,15 @@ class MainWindow(QMainWindow):
         self._refresh_preview()
 
     def action_convert_selected(self) -> None:
-        rows = sorted({idx.row() for idx in self.table_view.selectionModel().selectedRows()})
-        if not rows:
+        if not self.table_view.selectionModel().hasSelection():
             QMessageBox.information(self, tr("msgbox.no_selection.title"), tr("msgbox.no_selection.text"))
             return
-        self._start_conversion(rows)
+        self._start_conversion(self._selected_retry_rows())
+
+    def _selected_retry_rows(self) -> list[int]:
+        """Selected rows that need a retry. Converting a saved one would duplicate its file."""
+        rows = sorted({idx.row() for idx in self.table_view.selectionModel().selectedRows()})
+        return [row for row in rows if (item := self.model.item_at(row)) is not None and item.display_state in RETRY_STATES]
 
     def _start_conversion(self, rows: list[int]) -> None:
         if not rows:
@@ -983,6 +987,8 @@ class MainWindow(QMainWindow):
         row = self.model.row_of(item)
         if row >= 0 and self._selected_row() == row:
             self._refresh_preview()
+        else:
+            self._refresh_retry_action()
 
     def _on_item_started(self, item: QueueItem) -> None:
         self._refresh_preview_if_selected(item)
@@ -1114,8 +1120,12 @@ class MainWindow(QMainWindow):
         self.save_copy_action.setEnabled(result)
         self.open_file_action.setEnabled(saved)
         self.reveal_action.setEnabled(saved)
-        self.retry_action.setEnabled(state in RETRY_STATES)
+        self._refresh_retry_action()
         self.remove_action.setEnabled(item is not None)
+
+    def _refresh_retry_action(self) -> None:
+        """Unlike the other actions, Retry follows the whole selection."""
+        self.retry_action.setEnabled(bool(self._selected_retry_rows()))
 
     def _fit_preview_title(self) -> None:
         """Middle-elide the title so the extension survives a narrow pane."""

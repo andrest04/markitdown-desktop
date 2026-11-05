@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   converting forever. It now fails as a connection problem after 10 seconds to
   connect or 60 seconds without data. Large downloads with steady data are not
   cut off.
+- Retry on a selection mixing failed and saved rows converted the saved ones
+  again, leaving a duplicate such as `good (1).md`. Only rows that need it are
+  retried now, and Retry is available when any selected row needs it.
 - The preview no longer reads local files or network shares for images and
   stylesheets that converted text points at. Images embedded in the text still
   show.
