@@ -17,6 +17,7 @@ def make_item(status=ItemStatus.DONE, saved="", save_error="", error="", result=
         display_name="report.pdf",
         status=status,
         saved_path=saved,
+        saved_text=result if saved else None,
         save_error=save_error,
         error_message=error,
         markdown_result=result,
@@ -151,12 +152,6 @@ class WindowDetailTests(WindowTestCase):
         self.select(make_item(saved="/x/report.md", result="one two"))
         i18n_manager.set_language(LANG_ES, self.window.settings)
         self.assertEqual(self.window.preview_header_status.text(), "Guardado como report.md en Descargas, 2 palabras")
-
-    def test_editing_the_markdown_updates_the_size(self):
-        self.select(make_item(saved="/x/report.md", result="one two"))
-        self.window.raw_view.setPlainText("one two three")
-        process_events()
-        self.assertTrue(self.window.preview_header_status.text().endswith("3 words"))
 
     def test_selecting_an_item_does_not_write_back_through_the_guard(self):
         item = make_item(saved="/x/report.md", result="one two")

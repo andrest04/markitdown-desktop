@@ -53,7 +53,9 @@ Select a file to read the result, then **Copy Markdown**, **Open file**, or
   usually needs OCR, which needs Azure Document Intelligence (below).
 - **Preview and edit.** The **Preview** tab renders the Markdown at a readable
   line length; the **Markdown** tab holds the raw text, which you can edit
-  before copying it or saving a copy.
+  before copying it or saving a copy. For a very long result, the preview shows
+  only the beginning and says so; the **Markdown** tab and the saved file stay
+  complete.
 - **Also save elsewhere.** **More** has **Save a copy...** and **Export all...**.
   These are optional: the save to Downloads has already happened.
 - **Light and dark themes**, ink on paper with one highlighter. Follow the

@@ -12,6 +12,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from markdown.extensions import Extension
+from markdown.treeprocessors import Treeprocessor
 from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import QApplication, QPushButton
 
@@ -531,13 +533,59 @@ th, td {{ padding: 5px 20px 5px 0; border-bottom: 1px solid {t.rule}; }}
 """
 
 
+def heading_anchor(heading: str) -> str:
+    """The name a heading goes by, as GitHub makes it, which is what links in Markdown
+    mostly follow: `Credits & License` is `credits--license`, and accents stay."""
+    return re.sub(r"[^\w\- ]", "", heading.strip().lower()).replace(" ", "-")
+
+
+_HEADING_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
+# What `markdown` stands in for escapes and raw inline HTML until after this runs.
+_STASH_PLACEHOLDER = re.compile("\x02.*?\x03")
+
+
+class _HeadingIdProcessor(Treeprocessor):
+    """Gives each heading an id, which QTextBrowser takes as an anchor. Repeats number
+    the way GitHub does: `notes`, `notes-1`. One pass, so a long text stays cheap."""
+
+    def run(self, root) -> None:
+        headings = [element for element in root.iter() if element.tag in _HEADING_TAGS]
+        taken = {element.get("id") for element in headings if element.get("id")}
+        last_number: dict[str, int] = {}
+        for heading in headings:
+            if heading.get("id"):
+                continue
+            base = heading_anchor(_STASH_PLACEHOLDER.sub("", "".join(heading.itertext())))
+            if not base:
+                continue
+            name = base
+            while name in taken:
+                last_number[base] = last_number.get(base, 0) + 1
+                name = f"{base}-{last_number[base]}"
+            taken.add(name)
+            heading.set("id", name)
+
+
+class HeadingIds(Extension):
+    """Stands in for `toc`, whose search for a free id made repeated headings quadratic.
+    Having no `[TOC]` marker, it also leaves that text alone."""
+
+    def extendMarkdown(self, md) -> None:
+        # After inline patterns (20), so the text is final, and attr_list (8), so ids set
+        # in the text are seen.
+        md.treeprocessors.register(_HeadingIdProcessor(md), "heading_ids", 5)
+
+
 _PRE = re.compile(r"<pre>(.*?)</pre>", re.DOTALL)
 _BLOCKQUOTE = re.compile(r"<blockquote>(.*?)</blockquote>", re.DOTALL)
 _BLOCK_SPACING = "margin-top:12px;margin-bottom:16px"
 
 
-def preview_html(html: str, theme_name: str) -> str:
-    """Give converted HTML the spacing Qt's rich text only honors on table cells."""
+def preview_html(html: str, theme_name: str, notice: str = "") -> str:
+    """Give converted HTML the spacing Qt's rich text only honors on table cells.
+
+    `notice` is the app's own text about the preview, shown above the converted text.
+    """
     t = tokens_for(theme_name)
 
     def code_block(found: re.Match) -> str:
@@ -556,7 +604,8 @@ def preview_html(html: str, theme_name: str) -> str:
         )
 
     html = html.replace("<table>", f'<table cellspacing="0" style="{_BLOCK_SPACING}">')
-    return _BLOCKQUOTE.sub(quote, _PRE.sub(code_block, html))
+    html = _BLOCKQUOTE.sub(quote, _PRE.sub(code_block, html))
+    return f'<p style="color:{t.muted};margin-bottom:16px">{notice}</p>{html}' if notice else html
 
 
 def needs_full_width(html: str) -> bool:

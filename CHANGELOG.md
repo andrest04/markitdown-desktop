@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Preview tab renders the first 50,000 characters of a very long result, cut
+  at a line where one falls past the halfway mark, and says so above the text. The
+  Markdown tab and the saved file stay complete.
+
+### Fixed
+
+- A very long result froze the window, for about 24 seconds with a 50,000-row
+  table, each time it was shown and on every keystroke in the Markdown tab. The
+  preview now also waits for a pause in typing.
+- "All conversions finished" stayed in the status bar for up to 4 seconds into a
+  new conversion. Starting new work now clears it.
+- Adding or finishing something with Shift held left no row selected and the preview
+  empty, although the file was saved correctly. Selecting a row for the app's own
+  reasons no longer depends on the keys held down.
+- A link such as `[go](#section)` did not scroll to a plain `# Section` heading. It
+  does now, with headings named and numbered as GitHub does (`notes`, `notes-1`), and
+  a link differing only in case still finds its heading.
+- If the conversions finished while the closing question was open, it still said
+  results would be lost, and Keep converting meant closing a second time. The
+  question now goes away once nothing is left, and the count stays current until
+  then. The window closes if everything it was waiting on was saved. If not, it stays
+  open on the failed row, so the only copy of a text is not lost.
+- With a saved row first and a failed row also selected, Retry was in the menu but
+  not in the header. The header now has it whenever the menu does.
+- Adding a folder already in the list said none of its files could be converted,
+  and adding a file already in the list said nothing. Both now say they are already
+  in the list, as a repeated link does.
+- After an edit in the Markdown tab, the header's word count described the edit
+  while naming the saved file, which edits do not change. It now counts what the
+  file holds.
+- A save that failed on a full disk left an empty file behind, so every Retry added
+  another and the success landed on a later name. A failed save, export or copy no
+  longer leaves a new file, and a file that was already there is never removed.
+- Retry after a failed save converted the file again, so it failed if the source
+  had gone in the meantime, and the text was out of reach. It now saves the text
+  already in memory, including edits made since. Text that never reached a file
+  stays available through Copy, Save a copy and Export, even if a later conversion
+  of that item fails.
+- Changing the hints in Advanced settings had no effect on a file already
+  converted, so a wrong encoding could not be corrected without losing the hint.
+  Accepting changed hints now converts it again at once. The earlier file stays,
+  and the new one takes a numeric suffix. Unchanged hints and other settings
+  convert nothing. If the Markdown tab holds edits that are in no file, it asks
+  first, and declining keeps the edits and the hints. Hints changed during a
+  conversion make it convert once more after that one ends, by the same rule.
+
 ## [1.4.1] - 2026-11-05
 
 ### Changed

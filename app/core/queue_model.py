@@ -92,13 +92,16 @@ class QueueItem:
     status: ItemStatus = ItemStatus.PENDING
     error_message: str = ""  # raw library text, for the detail pane
     error_reason: FailureReason = FailureReason.GENERIC
-    markdown_result: str | None = None
+    markdown_result: str | None = None  # the Markdown tab's edits land here
+    converted_text: str | None = None  # as the last conversion returned it
     # Per-item conversion overrides (extension/mimetype/charset hints)
     extension_override: str = ""
     mimetype_override: str = ""
     charset_override: str = ""
     # Result of the automatic save-to-Downloads step (set after conversion).
     saved_path: str = ""
+    saved_text: str | None = None  # what that file holds; edits change only markdown_result
+    saved_word_count: int | None = None  # of saved_text, kept by `queue_text`
     save_error: str = ""  # raw OS text
     save_error_reason: FailureReason = FailureReason.SAVE_GENERIC
 
@@ -138,12 +141,19 @@ class QueueItem:
             return DisplayState.SAVE_FAILED
         return DisplayState.DONE
 
+    @property
+    def has_unsaved_edits(self) -> bool:
+        """Text the person typed that exists nowhere else, so converting would lose it."""
+        reference = self.saved_text if self.saved_text is not None else self.converted_text
+        return bool(self.markdown_result) and self.markdown_result != reference
+
     def mark_converting(self) -> None:
         self.status = ItemStatus.CONVERTING
 
     def mark_converted(self, markdown_text: str) -> None:
         self.status = ItemStatus.DONE
         self.markdown_result = markdown_text
+        self.converted_text = markdown_text
         self.error_message = ""
 
     def mark_failed(self, message: str, reason: FailureReason = FailureReason.GENERIC) -> None:
@@ -154,11 +164,15 @@ class QueueItem:
 
     def mark_saved(self, path: str) -> None:
         self.saved_path = str(path)
+        self.saved_text = self.markdown_result
+        self.saved_word_count = None
         self.save_error = ""
 
     def mark_save_failed(self, error: str, reason: FailureReason = FailureReason.SAVE_GENERIC) -> None:
         """The conversion itself succeeded, so the status stays DONE."""
         self.saved_path = ""
+        self.saved_text = None
+        self.saved_word_count = None
         self.save_error = str(error)
         self.save_error_reason = reason
 

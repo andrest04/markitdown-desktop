@@ -16,7 +16,12 @@ from app.core.converter import (
     auto_save_markdown,
     classify_save_error,
 )
-from app.core.queue_model import FailureReason, QueueItem, QueueTableModel
+from app.core.queue_model import DisplayState, FailureReason, QueueItem, QueueTableModel
+
+
+def _save_is_all_it_needs(item: QueueItem) -> bool:
+    """Text edited away converts again instead, so no save ever writes an empty `.md`."""
+    return item.display_state == DisplayState.SAVE_FAILED and bool((item.markdown_result or "").strip())
 
 
 class ConversionQueue(QObject):
@@ -32,6 +37,8 @@ class ConversionQueue(QObject):
     item_failed = Signal(object, str)
     item_saved = Signal(object, str)
     item_save_failed = Signal(object, str)
+    batch_started = Signal()  # work begins from idle; batch_finished is the end of it
+    conversion_again_due = Signal(object)  # hints changed during the conversion that just ended
     progress_changed = Signal(int, int)  # completed, total
     batch_finished = Signal()
 
@@ -44,6 +51,7 @@ class ConversionQueue(QObject):
         # Dispatched but not yet finished. Status only changes once a worker
         # actually starts, so it cannot guard against double dispatch.
         self._in_flight: dict[QueueItem, ConversionWorker] = {}
+        self._convert_again: set[QueueItem] = set()
 
     def enqueue(self, items: list[QueueItem], options: ConversionOptions) -> int:
         """Start a worker for each item not already in flight; returns how many."""
@@ -52,9 +60,11 @@ class ConversionQueue(QObject):
             return 0
 
         # Totals accumulate across overlapping batches and reset only when idle.
-        if not self._in_flight:
+        starting = not self._in_flight
+        if starting:
             self._completed_count = 0
             self._total_count = 0
+            self.batch_started.emit()
         self._total_count += len(to_start)
 
         pool = QThreadPool.globalInstance()
@@ -69,9 +79,38 @@ class ConversionQueue(QObject):
         self.progress_changed.emit(self._completed_count, self._total_count)
         return len(to_start)
 
-    def unfinished_count(self) -> int:
+    def retry(self, items: list[QueueItem], options: ConversionOptions) -> int:
+        """Do what each item needs again; returns how many were dealt with.
+
+        A failed save still holds its text, and its source may be gone by now, so it
+        only saves. That takes no worker, so progress and the batch are left alone.
+        """
+        to_save = [item for item in items if item not in self._in_flight and _save_is_all_it_needs(item)]
+        # Conversions first: starting a batch clears the message a save leaves.
+        started = self.enqueue([item for item in items if item not in to_save], options)
+        for item in to_save:
+            self._save_again(item)
+        return len(to_save) + started
+
+    def hints_changed(self, item: QueueItem) -> bool:
+        """Note new hints on an item with a worker; False if it has none, so nothing changes.
+
+        A worker not started will read them. A running one may have read the old ones, and
+        cannot be interrupted, so `conversion_again_due` says when it has ended.
+        """
+        worker = self._in_flight.get(item)
+        if worker is None:
+            return False
+        if worker.has_started:
+            self._convert_again.add(item)
+        return True
+
+    def unfinished_items(self) -> list[QueueItem]:
         """Results still to come. A removed item's result has nowhere to go."""
-        return sum(self._model.row_of(item) >= 0 for item in self._in_flight)
+        return [item for item in self._in_flight if self._model.row_of(item) >= 0]
+
+    def unfinished_count(self) -> int:
+        return len(self.unfinished_items())
 
     def cancel_unstarted(self) -> None:
         """Cancel every worker that has not started, for closing. See `discard`."""
@@ -85,6 +124,7 @@ class ConversionQueue(QObject):
         counting until it returns, and its result goes nowhere, since the item
         no longer has a row.
         """
+        self._convert_again.difference_update(items)
         pool = QThreadPool.globalInstance()
         cancelled = [item for item in items if item in self._in_flight and self._in_flight[item].take_from(pool)]
         if not cancelled:
@@ -143,9 +183,22 @@ class ConversionQueue(QObject):
             item.mark_saved(str(saved_path))
             self.item_saved.emit(item, str(saved_path))
 
+    def _save_again(self, item: QueueItem) -> None:
+        row = self._model.row_of(item)
+        if row < 0:
+            return
+        self._auto_save(item)
+        self._model.refresh_row(row)
+        self.item_finished.emit(item)
+        if item.save_error:
+            self.item_save_failed.emit(item, item.save_error)
+
     def _advance_progress(self, item: QueueItem) -> None:
         self._in_flight.pop(item, None)
         self._completed_count += 1
         self.progress_changed.emit(self._completed_count, self._total_count)
+        if item in self._convert_again:
+            self._convert_again.discard(item)
+            self.conversion_again_due.emit(item)
         if not self._in_flight:
             self.batch_finished.emit()

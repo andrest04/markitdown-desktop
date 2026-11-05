@@ -8,7 +8,15 @@ import sys
 import webbrowser
 
 import markdown as markdown_lib
-from PySide6.QtCore import QEvent, QRect, QSettings, Qt, QTimer, QUrl
+from PySide6.QtCore import (
+    QEvent,
+    QItemSelectionModel,
+    QRect,
+    QSettings,
+    Qt,
+    QTimer,
+    QUrl,
+)
 from PySide6.QtGui import (
     QAction,
     QDesktopServices,
@@ -47,6 +55,7 @@ from app.core.converter import (
     default_basename,
     export_markdown,
     get_downloads_dir,
+    save_copy,
     supported_name_filter,
 )
 from app.core.queue_model import (
@@ -73,6 +82,7 @@ from app.ui.status_mark import StatusMark
 from app.ui.theme import (
     PREVIEW_MARGIN,
     READING_WIDTH,
+    HeadingIds,
     apply_fusion_palette,
     document_css_for,
     needs_full_width,
@@ -110,10 +120,30 @@ _BRAND_MARGINS_FILLED = (12, 14, 14, 10)
 # Fits a headline and a detail line, so rows never shift when one goes away.
 _SUMMARY_HEIGHT = 46
 
+# Characters of Markdown the preview renders. Measured on a narrow table, the worst
+# case found: 50,000 characters take about 0.5 s, 100,000 about 2 s and the whole
+# 739 KB of a 50,000-row table about 24 s, since the cost grows faster than the size.
+# The same amount of prose takes 0.02 s.
+PREVIEW_CHAR_LIMIT = 50_000
+# Long enough to span the gap between keystrokes, short enough to feel live.
+_RENDER_DEBOUNCE_MS = 200
+
 
 def _save_failure_text(reason: FailureReason, detail: str) -> str:
     """For a message box, which has room for the system's words after the reason."""
     return f"{tr(reason.value)} ({detail})"
+
+
+_MARKDOWN_EXTENSIONS = ["extra", "sane_lists", "tables", HeadingIds()]
+
+
+def preview_excerpt(text: str) -> str:
+    """As much of `text` as the preview renders, ending at a line boundary if that keeps
+    most of the limit: a title above one very long line must not preview only the title."""
+    if len(text) <= PREVIEW_CHAR_LIMIT:
+        return text
+    line_end = text.rfind("\n", 0, PREVIEW_CHAR_LIMIT)
+    return text[: line_end + 1] if line_end + 1 >= PREVIEW_CHAR_LIMIT // 2 else text[:PREVIEW_CHAR_LIMIT]
 
 
 def reveal_command(path: str) -> str | list[str]:
@@ -173,6 +203,7 @@ class MainWindow(QMainWindow):
         # and clip the action row in longer languages or larger fonts.
         self.setMinimumHeight(COMPACT_WINDOW_SIZE[1])
         self._showing_empty = True
+        self._closing = False
 
         self._preview_item: QueueItem | None = None
         self._preview_full_width = False
@@ -187,6 +218,8 @@ class MainWindow(QMainWindow):
         self.conversion_queue.item_failed.connect(self._on_item_failed)
         self.conversion_queue.item_saved.connect(self._on_item_saved)
         self.conversion_queue.item_save_failed.connect(self._on_item_save_failed)
+        self.conversion_queue.batch_started.connect(self._on_batch_started)
+        self.conversion_queue.conversion_again_due.connect(self._on_conversion_again_due)
         self.conversion_queue.progress_changed.connect(self._on_progress_changed)
         self.conversion_queue.batch_finished.connect(self._on_batch_finished)
 
@@ -197,6 +230,10 @@ class MainWindow(QMainWindow):
         self._copy_feedback.setSingleShot(True)
         self._copy_feedback.setInterval(_COPY_FEEDBACK_MS)
         self._copy_feedback.timeout.connect(self._restore_copy_label)
+        self._render_timer = QTimer(self)
+        self._render_timer.setSingleShot(True)
+        self._render_timer.setInterval(_RENDER_DEBOUNCE_MS)
+        self._render_timer.timeout.connect(self._on_raw_edit_settled)
 
         self._build_ui()
         self._build_menu()
@@ -780,6 +817,7 @@ class MainWindow(QMainWindow):
         if unfinished and not self._confirm_close(unfinished):
             event.ignore()
             return
+        self._closing = True
         self.conversion_queue.cancel_unstarted()
         self.settings.setValue("window/geometry", self.saveGeometry())
         if not self._showing_empty:
@@ -791,16 +829,46 @@ class MainWindow(QMainWindow):
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Warning)
         box.setWindowTitle(tr("msgbox.close_busy.title"))
-        if unfinished == 1:
-            box.setText(tr("msgbox.close_busy.text.one"))
-        else:
-            box.setText(tr("msgbox.close_busy.text.other", count=unfinished))
+        box.setText(self._close_busy_text(unfinished))
         keep = box.addButton(tr("msgbox.close_busy.keep"), QMessageBox.ButtonRole.RejectRole)
         close_anyway = box.addButton(tr("msgbox.close_busy.close"), QMessageBox.ButtonRole.DestructiveRole)
         box.setDefaultButton(keep)
         box.setEscapeButton(keep)
-        box.exec()
-        return box.clickedButton() is close_anyway
+
+        # Results keep arriving while it is open, since `exec` runs an event loop. Once
+        # the last one is in, the question has no subject.
+        waiting_on = self.conversion_queue.unfinished_items()
+        nothing_left = False
+
+        def follow_queue(*_args) -> None:
+            nonlocal nothing_left
+            remaining = self.conversion_queue.unfinished_count()
+            if remaining:
+                box.setText(self._close_busy_text(remaining))
+            elif box.clickedButton() is None:
+                nothing_left = True
+                box.done(0)
+
+        self.conversion_queue.progress_changed.connect(follow_queue)
+        try:
+            box.exec()
+        finally:
+            self.conversion_queue.progress_changed.disconnect(follow_queue)
+        closing = box.clickedButton() is close_anyway
+        box.deleteLater()
+        if not nothing_left:
+            return closing
+        # The person asked to close, but a result that was not saved would go with it.
+        unsaved = [item for item in waiting_on if item.display_state != DisplayState.SAVED]
+        if unsaved:
+            self._select_row(self.model.row_of(unsaved[0]))
+        return not unsaved
+
+    @staticmethod
+    def _close_busy_text(unfinished: int) -> str:
+        if unfinished == 1:
+            return tr("msgbox.close_busy.text.one")
+        return tr("msgbox.close_busy.text.other", count=unfinished)
 
     def _on_language_changed(self, language: str) -> None:
         self._sync_language_buttons()
@@ -893,18 +961,32 @@ class MainWindow(QMainWindow):
     def _add_paths(self, paths: list[str]) -> None:
         classified = classify_paths(paths)
         new_items: list[QueueItem] = []
-        new_sources: set[str] = set()
+        seen_sources: set[str] = set()
+        already_queued = 0
         for file_path in classified.files:
             item = QueueItem.from_path(file_path)
-            if item.source not in new_sources and not self.model.source_exists(item.source):
-                new_sources.add(item.source)
+            if item.source in seen_sources:
+                continue
+            seen_sources.add(item.source)
+            if self.model.source_exists(item.source):
+                already_queued += 1
+            else:
                 new_items.append(item)
+        skipped = [tr("status.skipped_unsupported", count=classified.skipped)] if classified.skipped else []
         if new_items:
-            message = tr("status.added_files", count=len(new_items))
-            if classified.skipped:
-                message = f"{message} {tr('status.skipped_unsupported', count=classified.skipped)}"
-            self.status_bar.showMessage(message, 4000)
+            parts = [tr("status.added_files", count=len(new_items))]
+            if already_queued:
+                parts.append(tr("status.some_already_queued", count=already_queued))
             self._enqueue_and_start(new_items)
+            self.status_bar.showMessage(" ".join(parts + skipped), 4000)
+            return
+        if already_queued:
+            # Nothing to add is not the same as nothing supported.
+            if already_queued == 1:
+                headline = tr("status.file_already_queued")
+            else:
+                headline = tr("status.files_already_queued", count=already_queued)
+            self.status_bar.showMessage(" ".join([headline, *skipped]), 3000)
             return
         if classified.skipped or classified.saw_folder:
             QMessageBox.information(
@@ -917,8 +999,17 @@ class MainWindow(QMainWindow):
         """Add new items to the queue and start converting them right away."""
         rows = [self.model.add_item(item) for item in items]
         if self._selected_row() < 0:
-            self.table_view.selectRow(rows[0])
+            self._select_row(rows[0])
         self.conversion_queue.enqueue(items, self.conversion_options)
+
+    def _select_row(self, row: int) -> None:
+        """Select one row for the app's own reasons.
+
+        `QTableView.selectRow` is for the person's input and reads the keys held down:
+        with Shift it selects from an anchor nothing set, which is no row at all.
+        """
+        flags = QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows
+        self.table_view.selectionModel().setCurrentIndex(self.model.index(row, 0), flags)
 
     def action_add_url(self) -> None:
         url = self.url_edit.text().strip()
@@ -942,7 +1033,7 @@ class MainWindow(QMainWindow):
             # Removing a row empties the selection, and Delete needs one to act again.
             last_row = self.model.rowCount() - 1
             if last_row >= 0:
-                self.table_view.selectRow(min(rows[0], last_row))
+                self._select_row(min(rows[0], last_row))
             self._refresh_preview()
 
     def action_clear_all(self) -> None:
@@ -968,21 +1059,23 @@ class MainWindow(QMainWindow):
         if not rows:
             return
         items = [self.model.item_at(row) for row in rows]
-        self.conversion_queue.enqueue([item for item in items if item is not None], self.conversion_options)
+        self.conversion_queue.retry([item for item in items if item is not None], self.conversion_options)
 
     def _refresh_preview_if_selected(self, item: QueueItem) -> None:
         row = self.model.row_of(item)
         if row >= 0 and self._selected_row() == row:
             self._refresh_preview()
         else:
+            # Retry follows the whole selection, and this may be one of the other rows.
             self._refresh_retry_action()
+            self._refresh_header_buttons(self.model.item_at(self._selected_row()))
 
     def _on_item_started(self, item: QueueItem) -> None:
         self._refresh_preview_if_selected(item)
 
     def _on_item_finished(self, item: QueueItem) -> None:
         if self._selected_row() < 0:
-            self.table_view.selectRow(self.model.row_of(item))
+            self._select_row(self.model.row_of(item))
         else:
             self._refresh_preview_if_selected(item)
 
@@ -996,6 +1089,10 @@ class MainWindow(QMainWindow):
 
     def _on_item_save_failed(self, item: QueueItem, error: str) -> None:
         self.status_bar.showMessage(tr("status.autosave_failed", error=tr(item.save_error_reason.value)), 6000)
+
+    def _on_batch_started(self) -> None:
+        """New work, so what the strip said about earlier work is out of date."""
+        self.status_bar.clearMessage()
 
     def _on_progress_changed(self, completed: int, total: int) -> None:
         self.progress_bar.setMaximum(total)
@@ -1049,16 +1146,22 @@ class MainWindow(QMainWindow):
         self.preview_header.setVisible(True)
         self.preview_header_name.setToolTip(item.source)
         self._fit_preview_title()
-        state = item.display_state
-        kind = _HEADER_KIND[state]
+        kind = _HEADER_KIND[item.display_state]
         self.preview_header_status.setText(detail_status(item))
         self.preview_header_status.setToolTip(self._status_detail(item))
         self.preview_header_status.setProperty("kind", kind)
         self.preview_header_status.style().unpolish(self.preview_header_status)
         self.preview_header_status.style().polish(self.preview_header_status)
+        self._refresh_header_buttons(item)
 
+    def _refresh_header_buttons(self, item: QueueItem | None) -> None:
+        """The header's actions, apart from its words, which can take a while to count."""
+        if item is None:
+            return
+        state = item.display_state
         saved = state == DisplayState.SAVED
-        retry = state in RETRY_STATES
+        # Like the action, for the whole selection; everything else is about this row.
+        retry = state in RETRY_STATES or self.retry_action.isEnabled()
         copy = self._has_result(item)
         self.open_file_btn.setVisible(saved)
         self.reveal_btn.setVisible(saved)
@@ -1082,11 +1185,14 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _has_result(item: QueueItem | None) -> bool:
-        return (
-            item is not None
-            and item.status == ItemStatus.DONE
-            and bool(item.markdown_result)
-        )
+        """Whether there is current text to hand over.
+
+        A failed retry's text is out of date, and a file holds it. If no file does, it
+        is the only copy left, so it stays reachable.
+        """
+        if item is None or not item.markdown_result:
+            return False
+        return item.status == ItemStatus.DONE or (item.status == ItemStatus.ERROR and not item.saved_path)
 
     def _status_detail(self, item: QueueItem) -> str:
         state = item.display_state
@@ -1199,19 +1305,30 @@ class MainWindow(QMainWindow):
         self.preview_body.setVisible(True)
 
     def _on_raw_text_changed(self) -> None:
-        text = self.raw_view.toPlainText()
-        row = self._selected_row()
-        item = self.model.item_at(row)
+        """The item takes every keystroke; the costly part waits for a pause."""
+        item = self.model.item_at(self._selected_row())
         if item is not None:
-            item.markdown_result = text
+            item.markdown_result = self.raw_view.toPlainText()
+        self._render_timer.start()
+
+    def _on_raw_edit_settled(self) -> None:
+        item = self.model.item_at(self._selected_row())
+        if item is not None:
             self._update_preview_header(item)
-        self._render_markdown(text)
+        self._render_markdown(self.raw_view.toPlainText())
 
     def _render_markdown(self, text: str) -> None:
-        html = markdown_lib.markdown(text, extensions=["extra", "sane_lists", "tables"]) if text else ""
+        self._render_timer.stop()
+        excerpt = preview_excerpt(text)
+        html = markdown_lib.markdown(excerpt, extensions=_MARKDOWN_EXTENSIONS) if excerpt else ""
         self._preview_full_width = needs_full_width(html)
         self._fit_reading_width()
-        self.rendered_view.setHtml(preview_html(html, self._current_theme_name()))
+        notice = self._truncation_notice() if len(excerpt) < len(text) else ""
+        self.rendered_view.setHtml(preview_html(html, self._current_theme_name(), notice))
+
+    def _truncation_notice(self) -> str:
+        saved = self._preview_item is not None and self._preview_item.display_state == DisplayState.SAVED
+        return tr("preview.truncated" if saved else "preview.truncated_unsaved")
 
     def _fit_reading_width(self) -> None:
         width = self.rendered_view.viewport().width()
@@ -1220,7 +1337,7 @@ class MainWindow(QMainWindow):
     def _show_queue_menu(self, pos) -> None:
         index = self.table_view.indexAt(pos)
         if index.isValid() and not self.table_view.selectionModel().isSelected(index):
-            self.table_view.selectRow(index.row())
+            self._select_row(index.row())
         item = self.model.item_at(index.row()) if index.isValid() else None
         menu = QMenu(self)
         if item is not None and item.saved_path:
@@ -1245,8 +1362,7 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(self, tr("dialog.save_copy_as"), default_name, tr("filter.markdown"))
         if path:
             try:
-                with open(path, "w", encoding="utf-8") as fh:
-                    fh.write(item.markdown_result)
+                save_copy(path, item.markdown_result)
             except OSError as exc:
                 QMessageBox.warning(
                     self,
@@ -1257,7 +1373,7 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(tr("status.saved_copy_to", path=path), 4000)
 
     def action_export_all(self) -> None:
-        converted = [item for item in self.model.items() if item.status == ItemStatus.DONE and item.markdown_result]
+        converted = [item for item in self.model.items() if self._has_result(item)]
         if not converted:
             QMessageBox.information(self, tr("msgbox.nothing_to_export.title"), tr("msgbox.nothing_to_export.text"))
             return
@@ -1283,7 +1399,9 @@ class MainWindow(QMainWindow):
             )
 
     def action_copy_raw(self) -> None:
-        text = self.raw_view.toPlainText()
+        # From the item: a failed row shows its failure, so the tab may hold another's text.
+        item = self.model.item_at(self._selected_row())
+        text = item.markdown_result if item is not None else ""
         if not text:
             return
         QApplication.clipboard().setText(text)
@@ -1303,4 +1421,37 @@ class MainWindow(QMainWindow):
         dialog = AdvancedSettingsDialog(self.conversion_options, target_item, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.conversion_options = dialog.selected_options()
-            dialog.apply_item_overrides()
+            # A finished item would otherwise keep the text made without them, since
+            # Retry leaves it alone. A file already saved stays: the new one gets a suffix.
+            if (
+                dialog.apply_item_overrides()
+                and not self.conversion_queue.hints_changed(target_item)
+                and target_item.status == ItemStatus.DONE
+                and self._may_replace_text(target_item)
+            ):
+                self.conversion_queue.enqueue([target_item], self.conversion_options)
+
+    def _on_conversion_again_due(self, item: QueueItem) -> None:
+        # On the next turn of the event loop: the queue is mid-report, and this may ask.
+        QTimer.singleShot(0, lambda: self._convert_again(item))
+
+    def _convert_again(self, item: QueueItem) -> None:
+        if not self._closing and self.model.row_of(item) >= 0 and self._may_replace_text(item):
+            self.conversion_queue.enqueue([item], self.conversion_options)
+
+    def _may_replace_text(self, item: QueueItem) -> bool:
+        """Converting replaces the item's text, so edits no file holds are asked about."""
+        if not item.has_unsaved_edits:
+            return True
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(tr("msgbox.replace_edits.title"))
+        box.setText(tr("msgbox.replace_edits.text"))
+        keep = box.addButton(tr("msgbox.replace_edits.keep"), QMessageBox.ButtonRole.RejectRole)
+        convert = box.addButton(tr("msgbox.replace_edits.convert"), QMessageBox.ButtonRole.DestructiveRole)
+        box.setDefaultButton(keep)
+        box.setEscapeButton(keep)
+        box.exec()
+        replacing = box.clickedButton() is convert
+        box.deleteLater()
+        return replacing

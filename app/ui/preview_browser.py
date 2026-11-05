@@ -28,9 +28,26 @@ class PreviewBrowser(QTextBrowser):
             return super().loadResource(kind, name)
         return self._blank_image if kind == QTextDocument.ResourceType.ImageResource else ""
 
+    def _anchor_for(self, fragment: str) -> str:
+        """The anchor a link means: the exact one, or else one differing only in case."""
+        folded = fragment.casefold()
+        close_match = fragment
+        block = self.document().begin()
+        while block.isValid():
+            piece = block.begin()
+            while not piece.atEnd():
+                for name in piece.fragment().charFormat().anchorNames():
+                    if name == fragment:
+                        return name
+                    if close_match is fragment and name.casefold() == folded:
+                        close_match = name
+                piece += 1
+            block = block.next()
+        return close_match
+
     def _on_link_clicked(self, url: QUrl) -> None:
         """A link scrolls or leaves for a browser. Anything else does nothing."""
         if url.isRelative() and url.hasFragment() and not url.path() and not url.hasQuery():
-            self.scrollToAnchor(url.fragment())
+            self.scrollToAnchor(self._anchor_for(url.fragment()))
         elif url.scheme() == "mailto" or (url.scheme() in ("http", "https") and url.host()):
             QDesktopServices.openUrl(url)

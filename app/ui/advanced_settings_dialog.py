@@ -19,6 +19,11 @@ from app.core.queue_model import QueueItem
 from app.i18n import tr
 
 
+def _effective_hints(item: QueueItem) -> tuple[str, str, str]:
+    """The hints as `convert_item` reads them, which ignores surrounding spaces."""
+    return (item.extension_override.strip(), item.mimetype_override.strip(), item.charset_override.strip())
+
+
 class AdvancedSettingsDialog(QDialog):
     """Secondary, opt-in dialog for the markitdown power-user options.
 
@@ -29,7 +34,7 @@ class AdvancedSettingsDialog(QDialog):
 
     Takes the current options and the item the hints apply to (None when no
     row is selected). On accept, the caller reads `selected_options()` and
-    calls `apply_item_overrides()`.
+    calls `apply_item_overrides()`, which says whether the hints changed.
     """
 
     def __init__(self, options: ConversionOptions, target_item: QueueItem | None = None, parent=None):
@@ -122,8 +127,13 @@ class AdvancedSettingsDialog(QDialog):
             cu_analyzer_id=self.cu_analyzer_edit.text(),
         )
 
-    def apply_item_overrides(self) -> None:
-        if self._target_item is not None:
-            self._target_item.extension_override = self.extension_override_edit.text()
-            self._target_item.mimetype_override = self.mimetype_override_edit.text()
-            self._target_item.charset_override = self.charset_override_edit.text()
+    def apply_item_overrides(self) -> bool:
+        """Store the hints on the item. True if that changes what a conversion does."""
+        item = self._target_item
+        if item is None:
+            return False
+        before = _effective_hints(item)
+        item.extension_override = self.extension_override_edit.text()
+        item.mimetype_override = self.mimetype_override_edit.text()
+        item.charset_override = self.charset_override_edit.text()
+        return _effective_hints(item) != before

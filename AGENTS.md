@@ -96,7 +96,9 @@ nothing test-related should be left in the user's actual Downloads folder.
   / `unique_download_path()` implement the Downloads auto-save contract
   (collision-safe numeric suffixing, `Path.home()`-based so it's portable
   across accounts/OSes). `export_markdown()` is the collision-safe bulk
-  export; it collects `OSError`s in its result instead of raising.
+  export; it collects `OSError`s in its result instead of raising. Both write through
+  `_write_new_file()`, and Save a copy through `save_copy()`: a failed write leaves no
+  new file, and a file that was there is never removed.
   `classify_paths()` sorts dropped/browsed paths for queueing.
   `classify_conversion_error()` and `classify_save_error()` sort failures into
   a `FailureReason`, by exception type and by errno, since library text cannot
@@ -113,14 +115,17 @@ nothing test-related should be left in the user's actual Downloads folder.
   address it while rows shift. What a state means lives in one place:
   `QueueItem.display_state` (a derived `DisplayState` enum, also translation
   keys) and the `mark_*()` transitions. A failed retry keeps `saved_path`,
-  because the earlier file still exists. `FailureReason` values are keys too:
+  because the earlier file still exists. `mark_saved()` records `saved_text`, which
+  the header counts once into `saved_word_count`, since edits only change
+  `markdown_result`. `FailureReason` values are keys too:
   an item stores the key plus the raw text, and `row_status_text()` and
   `failure_reason_text()` resolve them at display time. Rows carry that text in
   `Qt.AccessibleTextRole` for screen readers.
 - `app/core/conversion_queue.py` — `ConversionQueue(QObject)` owns the
   convert-then-auto-save contract: dispatch, in-flight guard, transitions,
   progress that accumulates across overlapping batches, and auto-save. It
-  emits signals and never calls `tr()`; the window translates. Worker signals
+  emits signals and never calls `tr()`; the window translates. `batch_started` fires
+  when work begins from idle, and the window clears the status bar. Worker signals
   connect to its bound slots, so results and saves run on the GUI thread.
   `discard()` is called after rows are removed: a worker not yet started is
   cancelled with `QThreadPool.tryTake` and leaves the total; a running one
@@ -147,12 +152,21 @@ nothing test-related should be left in the user's actual Downloads folder.
     `MainWindow.eventFilter`. Delete removes rows only while the list has
     focus (`WidgetShortcut`), so a file drop hands the list focus unless
     someone is typing or a dialog is open, and removing rows selects the row
-    now at the first removed position. `row_tooltip()` lives here too.
+    now at the first removed position. `row_tooltip()` lives here too. The window
+    selects rows itself through `_select_row()`, not `QTableView.selectRow()`, which
+    reads the keys held down and selects nothing with Shift.
   - `preview_browser.py` — `PreviewBrowser`, the rendered preview. Reads no
     image or stylesheet that converted text names, only embedded `data:` images.
     Links go through `_on_link_clicked()` (`setOpenLinks(False)`): fragments
     scroll, absolute `http`, `https` and `mailto` open externally, and the rest
-    do nothing. No `MainWindow` reference. On a scaled screen Qt checks for
+    do nothing, and a fragment with no exact anchor takes one differing only in case.
+    Heading ids come from `HeadingIds` in `theme.py`, named by `heading_anchor()`: not
+    the `toc` extension, which is quadratic on repeated headings. No `MainWindow`
+    reference. `_render_markdown()` in `main_window.py`
+    renders only `preview_excerpt()`, up to `PREVIEW_CHAR_LIMIT` and cut at a line if
+    that keeps at least half of it, with a notice through `preview_html()`, and typing in the Markdown tab reaches
+    it through a single-shot timer. The item takes every keystroke at once, so
+    nothing waits on that timer to be kept. On a scaled screen Qt checks for
     `name@2x.png` before `loadResource`, so `main.py` sets
     `QT_HIGHDPI_DISABLE_2X_IMAGE_LOADING` before anything imports Qt.
   - `queue_text.py` — plain functions for the pane's words: `queue_summary()`,
@@ -163,8 +177,13 @@ nothing test-related should be left in the user's actual Downloads folder.
   - `advanced_settings_dialog.py` — `AdvancedSettingsDialog`, the
     secondary settings panel opened from Edit > Advanced settings. Takes
     the current options and target item; on accept the caller reads
-    `selected_options()` and calls `apply_item_overrides()`. No `MainWindow`
-    reference.
+    `selected_options()` and calls `apply_item_overrides()`, which returns whether
+    the hints changed. Changed hints on an item with status `DONE` convert it again
+    through `enqueue()`, after `_may_replace_text()` asks if `has_unsaved_edits`, and a
+    failed item waits for Retry. `ConversionQueue.hints_changed()` handles an item with
+    a worker: one not started reads the new hints itself, and a running one is followed
+    by `conversion_again_due`, then one more conversion by the same rule, never at the
+    same time. No `MainWindow` reference.
   - `about_dialog.py` — `AboutDialog`. Reads the markitdown package
     version via `app.core.converter.get_markitdown_version()` rather
     than importing `markitdown` itself — `converter.py` is the only file
@@ -203,12 +222,21 @@ and `es` dicts in `app/i18n.py` — Spanish must stay neutral/professional
 
 **Retry**: `action_convert_selected()` (the Retry action and header button) only
 starts `_selected_retry_rows()`, and the action is enabled when that is not empty,
-while the other actions follow the first selected row. `_start_conversion()` does
+while the other actions follow the first selected row. The header button is visible
+under the same condition, and is then the one primary. `_start_conversion()` does
 not filter: the row button, Enter and the context menu check their own row first.
+It calls `ConversionQueue.retry()`: a `SAVE_FAILED` item with text saves again on the
+GUI thread, with no worker and no change to progress or `batch_finished`, and any
+other item goes through `enqueue()`. `_has_result()` decides what Copy, Save a copy
+and Export reach: `DONE` items with text, and `ERROR` items whose text never reached a
+file. A failed retry of a saved item offers nothing, since that text is out of date.
 
 **Closing**: with results still to come (`unfinished_count()`, which leaves out
 removed items), `closeEvent` asks through `_confirm_close()`, defaulting to keep
-converting. Close anyway calls `cancel_unstarted()`, the `discard()` path. A
+converting. The box follows `progress_changed` while open: the count stays current,
+and once nothing is left it ends, unless a button was already clicked. The window then
+closes only if every item the box was waiting on ended saved; otherwise it stays open
+on the first that did not. Close anyway calls `cancel_unstarted()`, the `discard()` path. A
 running worker cannot be interrupted, so after `app.exec()` `end_process()` in
 `main.py` syncs settings and, only if the pool still has an active thread, ends
 with `os._exit`, since a normal exit would wait for it and then raise
