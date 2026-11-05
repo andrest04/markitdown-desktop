@@ -913,18 +913,32 @@ class MainWindow(QMainWindow):
     def _add_paths(self, paths: list[str]) -> None:
         classified = classify_paths(paths)
         new_items: list[QueueItem] = []
-        new_sources: set[str] = set()
+        seen_sources: set[str] = set()
+        already_queued = 0
         for file_path in classified.files:
             item = QueueItem.from_path(file_path)
-            if item.source not in new_sources and not self.model.source_exists(item.source):
-                new_sources.add(item.source)
+            if item.source in seen_sources:
+                continue
+            seen_sources.add(item.source)
+            if self.model.source_exists(item.source):
+                already_queued += 1
+            else:
                 new_items.append(item)
+        skipped = [tr("status.skipped_unsupported", count=classified.skipped)] if classified.skipped else []
         if new_items:
-            message = tr("status.added_files", count=len(new_items))
-            if classified.skipped:
-                message = f"{message} {tr('status.skipped_unsupported', count=classified.skipped)}"
-            self.status_bar.showMessage(message, 4000)
+            parts = [tr("status.added_files", count=len(new_items))]
+            if already_queued:
+                parts.append(tr("status.some_already_queued", count=already_queued))
+            self.status_bar.showMessage(" ".join(parts + skipped), 4000)
             self._enqueue_and_start(new_items)
+            return
+        if already_queued:
+            # Nothing to add is not the same as nothing supported.
+            if already_queued == 1:
+                headline = tr("status.file_already_queued")
+            else:
+                headline = tr("status.files_already_queued", count=already_queued)
+            self.status_bar.showMessage(" ".join([headline, *skipped]), 3000)
             return
         if classified.skipped or classified.saw_folder:
             QMessageBox.information(

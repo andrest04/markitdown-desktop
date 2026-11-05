@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A very long result froze the window, for about 24 seconds with a 50,000-row
   table, each time it was shown and on every keystroke in the Markdown tab. The
   preview now also waits for a pause in typing.
+- Adding a folder already in the list said none of its files could be converted,
+  and adding a file already in the list said nothing. Both now say they are already
+  in the list, as a repeated link does.
 - After an edit in the Markdown tab, the header's word count described the edit
   while naming the saved file, which edits do not change. It now counts what the
   file holds.

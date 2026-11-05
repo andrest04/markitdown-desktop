@@ -143,6 +143,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Status bar messages
         "status.added_files": "Converting {count} file(s)",
         "status.url_already_queued": "That link is already in the list",
+        "status.file_already_queued": "That file is already in the list",
+        "status.files_already_queued": "Those {count} files are already in the list",
+        "status.some_already_queued": "{count} already in the list.",
         "status.saved_to": "Saved to {path}",
         "status.autosave_failed": "Converted, but could not save to Downloads: {error}",
         "status.conversion_failed": "Conversion failed: {message}",
@@ -328,6 +331,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Status bar messages
         "status.added_files": "Convirtiendo {count} archivo(s)",
         "status.url_already_queued": "Ese enlace ya está en la lista",
+        "status.file_already_queued": "Ese archivo ya está en la lista",
+        "status.files_already_queued": "Esos {count} archivos ya están en la lista",
+        "status.some_already_queued": "{count} ya en la lista.",
         "status.saved_to": "Guardado en {path}",
         "status.autosave_failed": "Convertido, pero no se pudo guardar en Descargas: {error}",
         "status.conversion_failed": "Falló la conversión: {message}",
