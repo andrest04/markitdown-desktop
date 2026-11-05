@@ -153,7 +153,9 @@ nothing test-related should be left in the user's actual Downloads folder.
     image or stylesheet that converted text names, only embedded `data:` images.
     Links go through `_on_link_clicked()` (`setOpenLinks(False)`): fragments
     scroll, absolute `http`, `https` and `mailto` open externally, and the rest
-    do nothing. No `MainWindow` reference. `_render_markdown()` in `main_window.py`
+    do nothing. Heading ids come from the `toc` extension of `markdown`, named by
+    `heading_anchor()` and with its `[TOC]` marker off; PyInstaller's `hook-markdown`
+    collects it. No `MainWindow` reference. `_render_markdown()` in `main_window.py`
     renders only `preview_excerpt()`, up to `PREVIEW_CHAR_LIMIT` and cut at a line,
     with a notice through `preview_html()`, and typing in the Markdown tab reaches
     it through a single-shot timer. The item takes every keystroke at once, so

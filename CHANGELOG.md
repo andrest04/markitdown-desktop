@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A very long result froze the window, for about 24 seconds with a 50,000-row
   table, each time it was shown and on every keystroke in the Markdown tab. The
   preview now also waits for a pause in typing.
+- A link such as `[go](#section)` did not scroll to a plain `# Section` heading. It
+  does now, with headings named as GitHub names them.
 - If the conversions finished while the closing question was open, it still said
   results would be lost, and Keep converting meant closing a second time. The window
   now closes on its own once nothing is left, and the count stays current until then.
